@@ -7,13 +7,13 @@
   
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Vue 3 -->
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <!-- SortableJS (拖曳) -->
+  <!-- Vue 3 全域版 -->
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <!-- SortableJS -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-  <!-- Canvas Confetti (脫單彩帶) -->
+  <!-- Canvas Confetti -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-  <!-- html2canvas (匯出限動) -->
+  <!-- html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -22,7 +22,6 @@
     :root {
       --board-bg: #23473f;
       --board-inner: #1c3b34;
-      --border-color: rgba(255, 255, 255, 0.25);
     }
     body {
       background-color: #121f1c;
@@ -30,26 +29,23 @@
       user-select: none;
       -webkit-user-select: none;
     }
-    .custom-scroll::-webkit-scrollbar {
-      width: 4px;
-    }
-    .custom-scroll::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.2);
-      border-radius: 4px;
-    }
     .avatar-glow {
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+    [v-cloak] {
+      display: none;
     }
   </style>
 </head>
 <body class="text-white min-h-screen flex flex-col items-center p-3 sm:p-6">
-  <div id="app" class="w-full max-w-md flex flex-col items-center">
+  <div id="app" v-cloak class="w-full max-w-md flex flex-col items-center">
 
     <!-- 頂部工具列 -->
     <header class="w-full flex items-center justify-between mb-4 px-2">
       <div class="flex items-center gap-2">
-        <span class="w-2.5 h-2.5 rounded-full" :class="isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'"></span>
+        <span class="w-2.5 h-2.5 rounded-full" :class="isCloudMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'"></span>
         <h1 class="text-lg font-bold tracking-wider text-emerald-100">感情狀態看板</h1>
+        <span v-if="!isCloudMode" class="text-[10px] text-amber-300/80 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-600/30">本機暫存模式</span>
       </div>
       <div class="flex gap-2">
         <button @click="copyRoomLink" class="bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-600/40 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all">
@@ -75,30 +71,27 @@
       </button>
     </div>
 
-    <!-- 看板主體（IG 9:16 風格容器） -->
-    <div id="capture-board" class="w-full rounded-2xl p-4 sm:p-5 flex flex-col shadow-2xl relative border border-white/15" style="background-color: var(--board-bg); min-height: 540px;">
+    <!-- 看板主體 -->
+    <div id="capture-board" class="w-full rounded-2xl p-4 sm:p-5 flex flex-col shadow-2xl relative border border-white/15" style="background-color: var(--board-bg); min-height: 520px;">
       
-      <!-- 卡片頂部月份顯示 -->
       <div class="text-center mb-5">
         <h2 class="font-mono text-2xl font-bold tracking-widest text-emerald-50 drop-shadow-sm">{{ currentMonth }}</h2>
       </div>
 
       <!-- 四欄狀態看板 -->
-      <div class="grid grid-cols-4 gap-1.5 sm:gap-2 flex-1">
+      <div class="grid grid-cols-4 gap-1 sm:gap-2 flex-1">
         <div 
           v-for="col in columns" 
           :key="col.id" 
           class="flex flex-col items-center border-r border-white/20 last:border-r-0 px-1"
         >
-          <!-- 欄位標題 -->
           <div class="text-center font-medium text-sm sm:text-base text-emerald-100 tracking-wider mb-4 pb-1.5 border-b border-white/20 w-full">
             {{ col.name }}
           </div>
 
-          <!-- 卡片放置區 (Sortable) -->
           <div 
             :id="'col-' + col.id"
-            class="kanban-col w-full flex-1 flex flex-col items-center gap-3.5 min-h-[340px]"
+            class="kanban-col w-full flex-1 flex flex-col items-center gap-3.5 min-h-[320px]"
             :data-status="col.id"
           >
             <div 
@@ -108,14 +101,12 @@
               @click="openActionMenu(member)"
               class="member-card cursor-pointer flex flex-col items-center group relative transition-transform active:scale-95"
             >
-              <!-- 頭像 -->
               <div class="relative">
                 <img 
-                  :src="member.avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=' + member.name" 
-                  class="w-13 h-13 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-white/80 avatar-glow group-hover:border-emerald-300"
+                  :src="member.avatar || ('https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(member.name))" 
+                  class="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-white/80 avatar-glow group-hover:border-emerald-300"
                   alt="avatar"
                 />
-                <!-- 連續月份徽章 -->
                 <span 
                   v-if="member.streakMonths > 1" 
                   class="absolute -top-1 -right-1 bg-amber-400 text-emerald-950 font-bold text-[9px] px-1.5 py-0.5 rounded-full shadow"
@@ -129,7 +120,6 @@
         </div>
       </div>
 
-      <!-- 浮水印 -->
       <div class="text-center mt-3 pt-2 border-t border-white/10 text-[10px] text-emerald-200/50">
         Status Board • @Friends
       </div>
@@ -137,12 +127,12 @@
 
     <!-- 底部功能按鈕 -->
     <div class="w-full mt-4 flex gap-2">
-      <button @click="showAddModal = true" class="w-full py-2.5 bg-emerald-800/80 hover:bg-emerald-700/80 border border-emerald-500/30 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all">
+      <button @click="showAddModal = true" class="w-full py-2.5 bg-emerald-800/80 hover:bg-emerald-700 border border-emerald-500/30 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all">
         <i data-lucide="user-plus" class="w-4 h-4"></i> 新增成員
       </button>
     </div>
 
-    <!-- 彈窗：點擊成員修改狀態 -->
+    <!-- 彈窗：調整狀態 -->
     <div v-if="selectedMember" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3" @click.self="selectedMember = null">
       <div class="bg-emerald-950 border border-emerald-700/50 rounded-2xl p-5 w-full max-w-xs text-center shadow-2xl">
         <h3 class="font-bold text-base text-emerald-100 mb-1">調整 {{ selectedMember.name }} 的狀態</h3>
@@ -193,12 +183,8 @@
 
   </div>
 
-  <!-- Firebase SDK -->
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js";
-
-    // 🔴 替換為你的 Firebase 設定
+    // 🔴 替換為你的 Firebase Config；若還沒設定，程式會自動無縫降級為 LocalStorage 模式
     const FIREBASE_CONFIG = {
       // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
@@ -223,8 +209,26 @@ const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
     };
 
-    const app = initializeApp(FIREBASE_CONFIG);
-    const db = getFirestore(app);
+    let db = null;
+    let docRef = null;
+    let onSnapshotFn = null;
+    let setDocFn = null;
+
+    const isConfigValid = FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+
+    if (isConfigValid) {
+      try {
+        const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.9.0/firebase-app.js");
+        const { getFirestore, doc, setDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore.js");
+        const app = initializeApp(FIREBASE_CONFIG);
+        db = getFirestore(app);
+        docRef = doc;
+        setDocFn = setDoc;
+        onSnapshotFn = onSnapshot;
+      } catch (err) {
+        console.warn("Firebase 初始化失敗，自動切換至本機暫存模式", err);
+      }
+    }
 
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
@@ -237,13 +241,12 @@ const analytics = getAnalytics(app);
           { id: 'dating', name: '交往' }
         ];
 
-        const isOnline = ref(true);
+        const isCloudMode = ref(!!db);
         const isExporting = ref(false);
         const isInherited = ref(false);
         const selectedMember = ref(null);
         const showAddModal = ref(false);
 
-        // 取得或產生 Room ID
         const getRoomId = () => {
           const hash = window.location.hash;
           const match = hash.match(/room=([a-zA-Z0-9_-]+)/);
@@ -255,7 +258,6 @@ const analytics = getAnalytics(app);
 
         const roomId = ref(getRoomId());
 
-        // 目前月份格式化 YYYY/MM
         const today = new Date();
         const currentYear = ref(today.getFullYear());
         const currentMonthNum = ref(today.getMonth() + 1);
@@ -264,48 +266,35 @@ const analytics = getAnalytics(app);
           return `${currentYear.value}/${m}`;
         });
 
-        // 房間資料狀態
-        const roomData = ref({
+        const defaultData = {
           members: {
             'm1': { id: 'm1', name: '小明', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80' },
             'm2': { id: 'm2', name: '小美', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80' }
           },
           snapshots: {}
-        });
-
-        const newMember = ref({ name: '', avatar: '', status: 'single' });
-
-        // 即時監聽 Firestore
-        const initFirestoreListener = () => {
-          const roomRef = doc(db, "status_rooms", roomId.value);
-          onSnapshot(roomRef, (snapshot) => {
-            if (snapshot.exists()) {
-              roomData.value = snapshot.data();
-              checkAndInherit();
-            } else {
-              // 建立初始房間
-              const initialData = {
-                members: roomData.value.members,
-                snapshots: {
-                  [currentMonth.value]: {
-                    'm1': { status: 'single', streak: 1 },
-                    'm2': { status: 'crush', streak: 1 }
-                  }
-                }
-              };
-              setDoc(roomRef, initialData);
-            }
-          });
         };
 
-        // 繼承判定
+        const roomData = ref(JSON.parse(localStorage.getItem('status_board_' + roomId.value)) || defaultData);
+        const newMember = ref({ name: '', avatar: '', status: 'single' });
+
+        const save = async () => {
+          localStorage.setItem('status_board_' + roomId.value, JSON.stringify(roomData.value));
+          if (db && setDocFn && docRef) {
+            try {
+              const rRef = docRef(db, "status_rooms", roomId.value);
+              await setDocFn(rRef, roomData.value, { merge: true });
+            } catch (e) {
+              console.error("雲端存檔失敗:", e);
+            }
+          }
+        };
+
         const checkAndInherit = async () => {
           const currentKey = currentMonth.value;
           const snapshots = roomData.value.snapshots || {};
 
           if (!snapshots[currentKey]) {
             isInherited.value = true;
-            // 找前一個有資料的月份
             const sortedMonths = Object.keys(snapshots).sort().reverse();
             const prevMonthKey = sortedMonths.find(m => m < currentKey);
             const inheritedSnapshot = {};
@@ -319,21 +308,31 @@ const analytics = getAnalytics(app);
               };
             });
 
-            // 寫回資料庫
-            snapshots[currentKey] = inheritedSnapshot;
-            await saveToCloud();
+            roomData.value.snapshots[currentKey] = inheritedSnapshot;
+            await save();
           } else {
             isInherited.value = false;
           }
           nextTick(initSortable);
         };
 
-        const saveToCloud = async () => {
-          const roomRef = doc(db, "status_rooms", roomId.value);
-          await setDoc(roomRef, roomData.value, { merge: true });
+        const initSync = () => {
+          if (db && onSnapshotFn && docRef) {
+            const rRef = docRef(db, "status_rooms", roomId.value);
+            onSnapshotFn(rRef, (snap) => {
+              if (snap.exists()) {
+                roomData.value = snap.data();
+                checkAndInherit();
+              } else {
+                checkAndInherit();
+                save();
+              }
+            });
+          } else {
+            checkAndInherit();
+          }
         };
 
-        // 依狀態篩選成員
         const getMembersByStatus = (statusId) => {
           const currentSnapshot = (roomData.value.snapshots && roomData.value.snapshots[currentMonth.value]) || {};
           const members = roomData.value.members || {};
@@ -346,7 +345,6 @@ const analytics = getAnalytics(app);
             }));
         };
 
-        // 更新狀態
         const updateStatus = async (memberId, newStatus) => {
           const currentKey = currentMonth.value;
           if (!roomData.value.snapshots[currentKey]) roomData.value.snapshots[currentKey] = {};
@@ -360,14 +358,13 @@ const analytics = getAnalytics(app);
           };
 
           selectedMember.value = null;
-          await saveToCloud();
+          await save();
 
           if (isDating) {
             confetti({ particleCount: 90, spread: 60, origin: { y: 0.7 } });
           }
         };
 
-        // 月份切換
         const changeMonth = (delta) => {
           let m = currentMonthNum.value + delta;
           let y = currentYear.value;
@@ -378,10 +375,11 @@ const analytics = getAnalytics(app);
           checkAndInherit();
         };
 
-        // 新增成員
         const addMember = async () => {
           if (!newMember.value.name.trim()) return;
           const newId = 'm_' + Date.now();
+          if (!roomData.value.members) roomData.value.members = {};
+          
           roomData.value.members[newId] = {
             id: newId,
             name: newMember.value.name.trim(),
@@ -394,14 +392,14 @@ const analytics = getAnalytics(app);
           };
           newMember.value = { name: '', avatar: '', status: 'single' };
           showAddModal.value = false;
-          await saveToCloud();
+          await save();
         };
 
         const removeMember = async (id) => {
           if (!confirm('確定要從房間刪除此成員嗎？')) return;
           delete roomData.value.members[id];
           selectedMember.value = null;
-          await saveToCloud();
+          await save();
         };
 
         const openActionMenu = (m) => {
@@ -410,7 +408,7 @@ const analytics = getAnalytics(app);
 
         const copyRoomLink = () => {
           navigator.clipboard.writeText(window.location.href);
-          alert('房間邀請連結已複製！發到群組大家點開就能一起填囉！');
+          alert('看板連結已複製！');
         };
 
         const exportStory = async () => {
@@ -424,7 +422,6 @@ const analytics = getAnalytics(app);
           isExporting.value = false;
         };
 
-        // 綁定拖曳
         const initSortable = () => {
           columns.forEach(col => {
             const el = document.getElementById('col-' + col.id);
@@ -445,11 +442,11 @@ const analytics = getAnalytics(app);
 
         onMounted(() => {
           lucide.createIcons();
-          initFirestoreListener();
+          initSync();
         });
 
         return {
-          columns, currentMonth, isInherited, isOnline, isExporting,
+          columns, currentMonth, isInherited, isCloudMode, isExporting,
           selectedMember, showAddModal, newMember,
           getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
           openActionMenu, copyRoomLink, exportStory
