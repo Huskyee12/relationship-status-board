@@ -209,6 +209,36 @@ createApp({
       event.target.value = '';
     };
 
+    // 修改既有成員暱稱
+    const isEditingName = ref(false);
+    const editingName = ref('');
+
+    const startEditName = () => {
+      if (!selectedMember.value) return;
+      editingName.value = selectedMember.value.name;
+      isEditingName.value = true;
+      nextTick(() => {
+        const input = document.getElementById('edit-member-name-input');
+        if (input) input.focus();
+      });
+    };
+
+    const saveMemberName = async () => {
+      if (!selectedMember.value) return;
+      const trimmed = editingName.value.trim();
+      if (trimmed && trimmed !== selectedMember.value.name) {
+        const id = selectedMember.value.id;
+        if (roomData.value.members && roomData.value.members[id]) {
+          roomData.value.members[id].name = trimmed;
+        }
+        selectedMember.value.name = trimmed;
+        if (window.BoardStorage) {
+          await window.BoardStorage.save(roomId.value, roomData.value);
+        }
+      }
+      isEditingName.value = false;
+    };
+
     // 新增成員
     const addMember = async () => {
       if (!newMember.value.name.trim()) return;
@@ -353,33 +383,3 @@ const removeMember = async (id) => {
               await checkAndInherit(false);
             } else if (!exists) {
               // 雲端目前尚無此房間紀錄：純檢視模式，絕不自動覆寫雲端
-              isCloudMode.value = true;
-              isInitialSyncDone = true;
-              await checkAndInherit(false);
-            }
-          }, (err) => {
-            console.warn("雲端即時連線異常，切換至本機離線模式", err);
-            isCloudMode.value = false;
-            if (!isInitialSyncDone) {
-              isInitialSyncDone = true;
-              checkAndInherit(false);
-            }
-          });
-          return;
-        }
-      }
-
-      // 若未啟用 Firebase 則使用純本機模式
-      isCloudMode.value = false;
-      isInitialSyncDone = true;
-      await checkAndInherit(false);
-    });
-
-    return {
-      columns, currentMonth, isInherited, isCloudMode, isExporting,
-      selectedMember, showAddModal, newMember,
-      getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
-      onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink
-    };
-  }
-}).mount('#app');
