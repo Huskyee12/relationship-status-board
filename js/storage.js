@@ -16,6 +16,7 @@ window.BoardStorage = {
     localStorage.setItem('status_board_' + roomId, JSON.stringify(data));
     if (this.db) {
       try {
+        // 直接覆寫整個 document，被 delete 的成員才會真正從雲端消失
         await this.db.collection("status_rooms").doc(roomId).set(data);
       } catch (e) {
         console.error("雲端存檔異常:", e);
