@@ -143,12 +143,31 @@ createApp({
     };
 
     // 移除成員
-    const removeMember = async (id) => {
-      if (!confirm('確定要從房間刪除此成員嗎？')) return;
-      delete roomData.value.members[id];
-      selectedMember.value = null;
-      if (window.BoardStorage) await window.BoardStorage.save(roomId.value, roomData.value);
-    };
+    // 修改 js/app.js 中的 removeMember
+const removeMember = async (id) => {
+  if (!confirm('確定要從房間刪除此成員嗎？')) return;
+
+  // 1. 從成員名單移除
+  if (roomData.value.members) {
+    delete roomData.value.members[id];
+  }
+
+  // 2. 同步清理所有月份的快照紀錄（避免換月時又被自動繼承出來）
+  if (roomData.value.snapshots) {
+    Object.keys(roomData.value.snapshots).forEach(month => {
+      if (roomData.value.snapshots[month]) {
+        delete roomData.value.snapshots[month][id];
+      }
+    });
+  }
+
+  selectedMember.value = null;
+
+  // 3. 儲存覆寫到雲端與本機
+  if (window.BoardStorage) {
+    await window.BoardStorage.save(roomId.value, roomData.value);
+  }
+};
 
     // CSV 匯出
     const exportData = () => {
