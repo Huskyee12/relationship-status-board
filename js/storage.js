@@ -46,8 +46,10 @@ window.BoardStorage = {
       if (doc.exists) {
         onUpdate(doc.data(), true /* existsInCloud */);
       } else {
-        // 雲端尚無此房間
-        onUpdate(null, false /* existsInCloud */);
+        // 若為本地尚未命中的快取暫態，忽略並等候伺服器真實資料
+        if (!doc.metadata || !doc.metadata.fromCache) {
+          onUpdate(null, false /* existsInCloud */);
+        }
       }
     }, (err) => {
       console.warn("Firestore 即時監聽失敗:", err);
