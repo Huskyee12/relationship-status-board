@@ -26,6 +26,7 @@ window.BoardUtils = {
           // 輸出壓縮後的 WebP/JPEG Base64 字串
           resolve(canvas.toDataURL('image/jpeg', 0.85));
         };
+        img.onerror = () => reject(new Error('圖片載入失敗'));
         img.src = e.target.result;
       };
       reader.onerror = reject;
