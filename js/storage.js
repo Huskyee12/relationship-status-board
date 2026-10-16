@@ -16,7 +16,7 @@ window.BoardStorage = {
     localStorage.setItem('status_board_' + roomId, JSON.stringify(data));
     if (this.db) {
       try {
-        await this.db.collection("status_rooms").doc(roomId).set(data, { merge: true });
+        await this.db.collection("status_rooms").doc(roomId).set(data);
       } catch (e) {
         console.error("雲端存檔異常:", e);
       }
