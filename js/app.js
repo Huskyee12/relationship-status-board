@@ -26,10 +26,7 @@ createApp({
     });
 
     const defaultData = {
-      members: {
-        'm1': { id: 'm1', name: '小明', avatar: '' },
-        'm2': { id: 'm2', name: '小美', avatar: '' }
-      },
+      members: {},
       snapshots: {}
     };
 
@@ -352,22 +349,20 @@ const removeMember = async (id) => {
               localStorage.setItem('status_board_' + roomId.value, JSON.stringify(roomData.value));
               isCloudMode.value = true;
               isInitialSyncDone = true;
-              await checkAndInherit(true);
-            } else {
-              // 雲端尚無此房間紀錄（全新房間），才使用本機或預設資料建立
-              if (!isInitialSyncDone) {
-                isCloudMode.value = true;
-                isInitialSyncDone = true;
-                await checkAndInherit(false);
-                await window.BoardStorage.save(roomId.value, roomData.value);
-              }
+              // 初次進入頁面僅在記憶體中運算繼承狀態，絕不主動寫入雲端
+              await checkAndInherit(false);
+            } else if (!exists) {
+              // 雲端目前尚無此房間紀錄：純檢視模式，絕不自動覆寫雲端
+              isCloudMode.value = true;
+              isInitialSyncDone = true;
+              await checkAndInherit(false);
             }
           }, (err) => {
             console.warn("雲端即時連線異常，切換至本機離線模式", err);
             isCloudMode.value = false;
             if (!isInitialSyncDone) {
               isInitialSyncDone = true;
-              checkAndInherit(true);
+              checkAndInherit(false);
             }
           });
           return;
@@ -377,7 +372,7 @@ const removeMember = async (id) => {
       // 若未啟用 Firebase 則使用純本機模式
       isCloudMode.value = false;
       isInitialSyncDone = true;
-      await checkAndInherit(true);
+      await checkAndInherit(false);
     });
 
     return {
