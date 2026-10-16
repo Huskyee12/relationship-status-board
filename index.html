@@ -112,8 +112,8 @@
       </div>
     </div>
 
-    <!-- 彈窗：調整狀態與頭像 -->
-    <div v-if="selectedMember" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3" @click.self="selectedMember = null">
+    <!-- 彈窗：調整狀態、頭像與暱稱 -->
+    <div v-if="selectedMember" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3" @click.self="selectedMember = null; isEditingName = false">
       <div class="bg-emerald-950 border border-emerald-700/50 rounded-2xl p-5 w-full max-w-xs text-center shadow-2xl flex flex-col items-center">
         <!-- 頭像與更換按鈕 -->
         <div class="relative w-16 h-16 mb-1.5 cursor-pointer group" @click="$refs.editAvatarInput.click()" title="點擊更換照片">
@@ -131,8 +131,28 @@
           更換頭像照片
         </button>
 
-        <h3 class="font-bold text-base text-emerald-100 mb-0.5">調整 {{ selectedMember.name }} 的狀態</h3>
-        <p class="text-xs text-emerald-400/80 mb-3.5">{{ currentMonth }}</p>
+        <!-- 姓名與修改暱稱 -->
+        <div class="flex items-center justify-center gap-1.5 mb-1">
+          <div v-if="isEditingName" class="flex items-center gap-1">
+            <input 
+              id="edit-member-name-input"
+              v-model="editingName" 
+              @keyup.enter="saveMemberName" 
+              type="text" 
+              maxlength="12"
+              class="bg-emerald-900 border border-emerald-400 rounded-lg px-2.5 py-1 text-sm text-center text-white focus:outline-none w-28"
+            />
+            <button @click="saveMemberName" class="bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-xs px-2 py-1 rounded-md">儲存</button>
+            <button @click="isEditingName = false" class="text-emerald-400 text-xs px-1">取消</button>
+          </div>
+          <div v-else class="flex items-center gap-1.5">
+            <h3 class="font-bold text-base text-emerald-100">{{ selectedMember.name }}</h3>
+            <button @click="startEditName" class="text-[11px] text-emerald-400 hover:text-emerald-200 underline">
+              修改暱稱
+            </button>
+          </div>
+        </div>
+        <p class="text-xs text-emerald-400/80 mb-3.5">調整 {{ currentMonth }} 的狀態</p>
         <div class="grid grid-cols-2 gap-2 mb-4 w-full">
           <button 
             v-for="col in columns" 
