@@ -1,0 +1,15 @@
+:root {
+  --board-bg: #23473f;
+  --board-inner: #1c3b34;
+}
+
+body {
+  background-color: #121f1c;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.avatar-glow {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
