@@ -1,11 +1,16 @@
 window.BoardStorage = {
   db: null,
+  isInitialized: false,
 
   init() {
+    if (this.isInitialized) return;
     try {
       if (window.firebase && window.FIREBASE_CONFIG) {
-        firebase.initializeApp(window.FIREBASE_CONFIG);
+        if (!firebase.apps || !firebase.apps.length) {
+          firebase.initializeApp(window.FIREBASE_CONFIG);
+        }
         this.db = firebase.firestore();
+        this.isInitialized = true;
       }
     } catch (e) {
       console.warn("Firebase 初始化失敗，使用本機模式", e);
@@ -13,25 +18,41 @@ window.BoardStorage = {
   },
 
   async save(roomId, data) {
-    localStorage.setItem('status_board_' + roomId, JSON.stringify(data));
+    if (!roomId) return;
+    // 確保深拷貝為純 JSON 物件，消除 Vue 3 Proxy 與 undefined
+    const cleanData = JSON.parse(JSON.stringify(data));
+    try {
+      localStorage.setItem('status_board_' + roomId, JSON.stringify(cleanData));
+    } catch (e) {
+      console.warn("LocalStorage 寫入失敗:", e);
+    }
+
     if (this.db) {
       try {
         // 直接覆寫整個 document，被 delete 的成員才會真正從雲端消失
-        await this.db.collection("status_rooms").doc(roomId).set(data);
+        await this.db.collection("status_rooms").doc(roomId).set(cleanData);
       } catch (e) {
         console.error("雲端存檔異常:", e);
       }
     }
   },
 
-  subscribe(roomId, onUpdate) {
-    if (this.db) {
-      this.db.collection("status_rooms").doc(roomId).onSnapshot((doc) => {
-        if (doc.exists) {
-          onUpdate(doc.data());
-        }
-      }, (err) => console.warn("Firestore 即時監聽失敗:", err));
+  subscribe(roomId, onUpdate, onError) {
+    if (!this.db) {
+      if (onError) onError(new Error("Firebase Firestore 未啟用"));
+      return () => {};
     }
+    return this.db.collection("status_rooms").doc(roomId).onSnapshot((doc) => {
+      if (doc.exists) {
+        onUpdate(doc.data(), true /* existsInCloud */);
+      } else {
+        // 雲端尚無此房間
+        onUpdate(null, false /* existsInCloud */);
+      }
+    }, (err) => {
+      console.warn("Firestore 即時監聽失敗:", err);
+      if (onError) onError(err);
+    });
   },
 
   // 1. 匯出標準 CSV 檔案 (加入 UTF-8 BOM 避免 Excel 亂碼)
