@@ -5,38 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>感情狀態看板</title>
   
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Vue 3 全域版 -->
   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
-  <!-- SortableJS -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-  <!-- Canvas Confetti -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-  <!-- html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <!-- Firebase 9+ 相容模式 (無需 ES Module import，穩定性最高) -->
+  <!-- Firebase 函式庫 -->
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
 
-  <style>
-    :root {
-      --board-bg: #23473f;
-      --board-inner: #1c3b34;
-    }
-    body {
-      background-color: #121f1c;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    .avatar-glow {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-    }
-  </style>
+  <!-- 本地樣式檔 -->
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="text-white min-h-screen flex flex-col items-center p-3 sm:p-6">
   <div id="app" class="w-full max-w-md flex flex-col items-center">
@@ -46,14 +27,13 @@
       <div class="flex items-center gap-2">
         <span class="w-2.5 h-2.5 rounded-full" :class="isCloudMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'"></span>
         <h1 class="text-lg font-bold tracking-wider text-emerald-100">感情狀態看板</h1>
-        <span v-if="!isCloudMode" class="text-[10px] text-amber-300/80 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-600/30">本機模式</span>
       </div>
       <div class="flex gap-2">
         <button @click="copyRoomLink" class="bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-600/40 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all">
           <i data-lucide="share-2" class="w-3.5 h-3.5"></i> 分享
         </button>
         <button @click="exportStory" :disabled="isExporting" class="bg-emerald-600 hover:bg-emerald-500 text-xs px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1 shadow-md transition-all">
-          <i data-lucide="download" class="w-3.5 h-3.5"></i> {{ isExporting ? '生成中...' : '匯出' }}
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> {{ isExporting ? '生成中...' : '匯出限動' }}
         </button>
       </div>
     </header>
@@ -72,34 +52,25 @@
       </button>
     </div>
 
-    <!-- 看板主體 -->
+    <!-- 看板主體容器 -->
     <div id="capture-board" class="w-full rounded-2xl p-4 sm:p-5 flex flex-col shadow-2xl relative border border-white/15" style="background-color: var(--board-bg); min-height: 520px;">
-      
       <div class="text-center mb-5">
         <h2 class="font-mono text-2xl font-bold tracking-widest text-emerald-50 drop-shadow-sm">{{ currentMonth }}</h2>
       </div>
 
       <!-- 四欄狀態看板 -->
       <div class="grid grid-cols-4 gap-1 sm:gap-2 flex-1">
-        <div 
-          v-for="col in columns" 
-          :key="col.id" 
-          class="flex flex-col items-center border-r border-white/20 last:border-r-0 px-1"
-        >
+        <div v-for="col in columns" :key="col.id" class="flex flex-col items-center border-r border-white/20 last:border-r-0 px-1">
           <div class="text-center font-medium text-sm sm:text-base text-emerald-100 tracking-wider mb-4 pb-1.5 border-b border-white/20 w-full">
             {{ col.name }}
           </div>
 
-          <div 
-            :id="'col-' + col.id"
-            class="kanban-col w-full flex-1 flex flex-col items-center gap-3.5 min-h-[320px]"
-            :data-status="col.id"
-          >
+          <div :id="'col-' + col.id" class="kanban-col w-full flex-1 flex flex-col items-center gap-3.5 min-h-[320px]" :data-status="col.id">
             <div 
               v-for="member in getMembersByStatus(col.id)" 
               :key="member.id"
               :data-id="member.id"
-              @click="openActionMenu(member)"
+              @click="selectedMember = member"
               class="member-card cursor-pointer flex flex-col items-center group relative transition-transform active:scale-95"
             >
               <div class="relative">
@@ -108,10 +79,7 @@
                   class="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-white/80 avatar-glow group-hover:border-emerald-300"
                   alt="avatar"
                 />
-                <span 
-                  v-if="member.streakMonths > 1" 
-                  class="absolute -top-1 -right-1 bg-amber-400 text-emerald-950 font-bold text-[9px] px-1.5 py-0.5 rounded-full shadow"
-                >
+                <span v-if="member.streakMonths > 1" class="absolute -top-1 -right-1 bg-amber-400 text-emerald-950 font-bold text-[9px] px-1.5 py-0.5 rounded-full shadow">
                   {{ member.streakMonths }}M
                 </span>
               </div>
@@ -126,11 +94,21 @@
       </div>
     </div>
 
-    <!-- 底部功能按鈕 -->
-    <div class="w-full mt-4 flex gap-2">
+    <!-- 底部操作列：新增成員、匯出/匯入 JSON -->
+    <div class="w-full mt-4 flex flex-col gap-2">
       <button @click="showAddModal = true" class="w-full py-2.5 bg-emerald-800/80 hover:bg-emerald-700 border border-emerald-500/30 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all">
         <i data-lucide="user-plus" class="w-4 h-4"></i> 新增成員
       </button>
+
+      <div class="flex gap-2 w-full text-xs text-emerald-300/80">
+        <button @click="exportData" class="flex-1 py-1.5 bg-emerald-950/60 hover:bg-emerald-900 border border-white/10 rounded-lg flex items-center justify-center gap-1">
+          <i data-lucide="file-down" class="w-3.5 h-3.5"></i> 備份 JSON
+        </button>
+        <label class="flex-1 py-1.5 bg-emerald-950/60 hover:bg-emerald-900 border border-white/10 rounded-lg flex items-center justify-center gap-1 cursor-pointer">
+          <i data-lucide="file-up" class="w-3.5 h-3.5"></i> 匯入 JSON
+          <input type="file" accept=".json" class="hidden" @change="importData">
+        </label>
+      </div>
     </div>
 
     <!-- 彈窗：調整狀態 -->
@@ -150,7 +128,7 @@
           </button>
         </div>
         <button @click="removeMember(selectedMember.id)" class="text-rose-400 hover:text-rose-300 text-xs py-1">
-          從此房間移除成員
+          從房間移除成員
         </button>
       </div>
     </div>
@@ -165,8 +143,12 @@
             <input v-model="newMember.name" type="text" placeholder="例如：大明" class="w-full bg-emerald-900/60 border border-emerald-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400">
           </div>
           <div>
-            <label class="block text-xs text-emerald-300/80 mb-1">頭像圖片網址 (選填)</label>
-            <input v-model="newMember.avatar" type="text" placeholder="留空使用預設頭像" class="w-full bg-emerald-900/60 border border-emerald-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400">
+            <label class="block text-xs text-emerald-300/80 mb-1">頭像照片上傳</label>
+            <input type="file" accept="image/*" @change="onAvatarFileChange" class="w-full text-xs text-emerald-200 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:bg-emerald-800 file:text-emerald-100 hover:file:bg-emerald-700 cursor-pointer">
+            <div v-if="newMember.avatar" class="mt-2 flex items-center gap-2">
+              <img :src="newMember.avatar" class="w-8 h-8 rounded-full border border-white/40 object-cover">
+              <span class="text-[10px] text-emerald-300">照片已選取並完成壓縮</span>
+            </div>
           </div>
           <div>
             <label class="block text-xs text-emerald-300/80 mb-1">初始狀態</label>
@@ -184,254 +166,10 @@
 
   </div>
 
-  <script>
-    // 1. 初始化 Firebase (Compat 全域模式)
-    const firebaseConfig = {
-      apiKey: "AIzaSyCRcwwiQJnyR4jdfq1kLIIvhj-affOQxlQ",
-      authDomain: "relationship-status-78aa0.firebaseapp.com",
-      projectId: "relationship-status-78aa0",
-      storageBucket: "relationship-status-78aa0.firebasestorage.app",
-      messagingSenderId: "423950657383",
-      appId: "1:423950657383:web:13b057f3fb1881326c31c2"
-    };
-
-    let db = null;
-    try {
-      if (window.firebase) {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-      }
-    } catch (e) {
-      console.warn("Firebase 啟動失敗，使用本機模式", e);
-    }
-
-    // 2. Vue 3 應用
-    const { createApp, ref, computed, onMounted, nextTick } = Vue;
-
-    createApp({
-      setup() {
-        const columns = [
-          { id: 'single', name: '單身' },
-          { id: 'crush', name: '暈船' },
-          { id: 'flirt', name: '曖昧' },
-          { id: 'dating', name: '交往' }
-        ];
-
-        const isCloudMode = ref(!!db);
-        const isExporting = ref(false);
-        const isInherited = ref(false);
-        const selectedMember = ref(null);
-        const showAddModal = ref(false);
-
-        const getRoomId = () => {
-          const hash = window.location.hash;
-          const match = hash.match(/room=([a-zA-Z0-9_-]+)/);
-          if (match) return match[1];
-          const newId = 'board_' + Math.random().toString(36).substring(2, 8);
-          window.location.hash = 'room=' + newId;
-          return newId;
-        };
-
-        const roomId = ref(getRoomId());
-
-        const today = new Date();
-        const currentYear = ref(today.getFullYear());
-        const currentMonthNum = ref(today.getMonth() + 1);
-        const currentMonth = computed(() => {
-          const m = currentMonthNum.value < 10 ? '0' + currentMonthNum.value : currentMonthNum.value;
-          return currentYear.value + '/' + m;
-        });
-
-        const defaultData = {
-          members: {
-            'm1': { id: 'm1', name: '小明', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80' },
-            'm2': { id: 'm2', name: '小美', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80' }
-          },
-          snapshots: {}
-        };
-
-        const savedData = localStorage.getItem('status_board_' + roomId.value);
-        const roomData = ref(savedData ? JSON.parse(savedData) : defaultData);
-        const newMember = ref({ name: '', avatar: '', status: 'single' });
-
-        const save = async () => {
-          localStorage.setItem('status_board_' + roomId.value, JSON.stringify(roomData.value));
-          if (db) {
-            try {
-              await db.collection("status_rooms").doc(roomId.value).set(roomData.value, { merge: true });
-            } catch (e) {
-              console.error("雲端存檔失敗:", e);
-            }
-          }
-        };
-
-        const checkAndInherit = async () => {
-          const currentKey = currentMonth.value;
-          const snapshots = roomData.value.snapshots || {};
-
-          if (!snapshots[currentKey]) {
-            isInherited.value = true;
-            const sortedMonths = Object.keys(snapshots).sort().reverse();
-            const prevMonthKey = sortedMonths.find(m => m < currentKey);
-            const inheritedSnapshot = {};
-
-            const memberList = roomData.value.members || {};
-            Object.keys(memberList).forEach(id => {
-              const prevRecord = prevMonthKey && snapshots[prevMonthKey] ? snapshots[prevMonthKey][id] : null;
-              inheritedSnapshot[id] = {
-                status: prevRecord ? prevRecord.status : 'single',
-                streak: prevRecord ? (prevRecord.streak || 1) + 1 : 1
-              };
-            });
-
-            roomData.value.snapshots[currentKey] = inheritedSnapshot;
-            await save();
-          } else {
-            isInherited.value = false;
-          }
-          nextTick(initSortable);
-        };
-
-        const initSync = () => {
-          if (db) {
-            db.collection("status_rooms").doc(roomId.value).onSnapshot((snap) => {
-              if (snap.exists) {
-                roomData.value = snap.data();
-                checkAndInherit();
-              } else {
-                checkAndInherit();
-                save();
-              }
-            }, (err) => {
-              console.warn("即時同步錯誤，維持本機資料", err);
-              checkAndInherit();
-            });
-          } else {
-            checkAndInherit();
-          }
-        };
-
-        const getMembersByStatus = (statusId) => {
-          const currentSnapshot = (roomData.value.snapshots && roomData.value.snapshots[currentMonth.value]) || {};
-          const members = roomData.value.members || {};
-          return Object.keys(members)
-            .filter(id => (currentSnapshot[id]?.status || 'single') === statusId)
-            .map(id => ({
-              ...members[id],
-              status: currentSnapshot[id]?.status || 'single',
-              streakMonths: currentSnapshot[id]?.streak || 1
-            }));
-        };
-
-        const updateStatus = async (memberId, newStatus) => {
-          const currentKey = currentMonth.value;
-          if (!roomData.value.snapshots[currentKey]) roomData.value.snapshots[currentKey] = {};
-          
-          const oldStatus = roomData.value.snapshots[currentKey][memberId]?.status;
-          const isDating = newStatus === 'dating' && oldStatus !== 'dating';
-
-          roomData.value.snapshots[currentKey][memberId] = {
-            status: newStatus,
-            streak: oldStatus === newStatus ? (roomData.value.snapshots[currentKey][memberId]?.streak || 1) : 1
-          };
-
-          selectedMember.value = null;
-          await save();
-
-          if (isDating && window.confetti) {
-            confetti({ particleCount: 90, spread: 60, origin: { y: 0.7 } });
-          }
-        };
-
-        const changeMonth = (delta) => {
-          let m = currentMonthNum.value + delta;
-          let y = currentYear.value;
-          if (m > 12) { m = 1; y++; }
-          if (m < 1) { m = 12; y--; }
-          currentMonthNum.value = m;
-          currentYear.value = y;
-          checkAndInherit();
-        };
-
-        const addMember = async () => {
-          if (!newMember.value.name.trim()) return;
-          const newId = 'm_' + Date.now();
-          if (!roomData.value.members) roomData.value.members = {};
-          
-          roomData.value.members[newId] = {
-            id: newId,
-            name: newMember.value.name.trim(),
-            avatar: newMember.value.avatar.trim()
-          };
-          if (!roomData.value.snapshots[currentMonth.value]) roomData.value.snapshots[currentMonth.value] = {};
-          roomData.value.snapshots[currentMonth.value][newId] = {
-            status: newMember.value.status,
-            streak: 1
-          };
-          newMember.value = { name: '', avatar: '', status: 'single' };
-          showAddModal.value = false;
-          await save();
-        };
-
-        const removeMember = async (id) => {
-          if (!confirm('確定要從房間刪除此成員嗎？')) return;
-          delete roomData.value.members[id];
-          selectedMember.value = null;
-          await save();
-        };
-
-        const openActionMenu = (m) => {
-          selectedMember.value = m;
-        };
-
-        const copyRoomLink = () => {
-          navigator.clipboard.writeText(window.location.href);
-          alert('看板連結已複製！發給朋友點開即可共同編輯！');
-        };
-
-        const exportStory = async () => {
-          isExporting.value = true;
-          const boardEl = document.getElementById('capture-board');
-          const canvas = await html2canvas(boardEl, { scale: 3, useCORS: true, backgroundColor: '#23473f' });
-          const link = document.createElement('a');
-          link.download = `Status-Board-${currentMonth.value.replace('/', '-')}.png`;
-          link.href = canvas.toDataURL('image/png');
-          link.click();
-          isExporting.value = false;
-        };
-
-        const initSortable = () => {
-          if (!window.Sortable) return;
-          columns.forEach(col => {
-            const el = document.getElementById('col-' + col.id);
-            if (!el || el._sortable) return;
-            el._sortable = Sortable.create(el, {
-              group: 'status-group',
-              animation: 150,
-              onEnd: (evt) => {
-                const memberId = evt.item.getAttribute('data-id');
-                const targetStatus = evt.to.getAttribute('data-status');
-                if (memberId && targetStatus) {
-                  updateStatus(memberId, targetStatus);
-                }
-              }
-            });
-          });
-        };
-
-        onMounted(() => {
-          if (window.lucide) lucide.createIcons();
-          initSync();
-        });
-
-        return {
-          columns, currentMonth, isInherited, isCloudMode, isExporting,
-          selectedMember, showAddModal, newMember,
-          getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
-          openActionMenu, copyRoomLink, exportStory
-        };
-      }
-    }).mount('#app');
-  </script>
+  <!-- 按照相依順序載入模組 -->
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
