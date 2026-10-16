@@ -26,7 +26,7 @@
     <!-- 頂部工具列 -->
     <header class="w-full flex items-center justify-between mb-4 px-2">
       <div class="flex items-center gap-2">
-        <span class="w-2.5 h-2.5 rounded-full" :class="isCloudMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'"></span>
+        <span class="w-2.5 h-2.5 rounded-full" :class="isCloudMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'" :title="isCloudMode ? '雲端同步中 (Firebase)' : '本機離線模式 (LocalStorage)'"></span>
         <h1 class="text-lg font-bold tracking-wider text-emerald-100">感情狀態看板</h1>
       </div>
       <div class="flex gap-2">
@@ -112,12 +112,28 @@
       </div>
     </div>
 
-    <!-- 彈窗：調整狀態 -->
+    <!-- 彈窗：調整狀態與頭像 -->
     <div v-if="selectedMember" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3" @click.self="selectedMember = null">
-      <div class="bg-emerald-950 border border-emerald-700/50 rounded-2xl p-5 w-full max-w-xs text-center shadow-2xl">
-        <h3 class="font-bold text-base text-emerald-100 mb-1">調整 {{ selectedMember.name }} 的狀態</h3>
-        <p class="text-xs text-emerald-400/80 mb-4">{{ currentMonth }}</p>
-        <div class="grid grid-cols-2 gap-2 mb-4">
+      <div class="bg-emerald-950 border border-emerald-700/50 rounded-2xl p-5 w-full max-w-xs text-center shadow-2xl flex flex-col items-center">
+        <!-- 頭像與更換按鈕 -->
+        <div class="relative w-16 h-16 mb-1.5 cursor-pointer group" @click="$refs.editAvatarInput.click()" title="點擊更換照片">
+          <img 
+            :src="selectedMember.avatar || ('https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(selectedMember.name))" 
+            class="w-16 h-16 rounded-full object-cover border-2 border-emerald-400/80 shadow-md group-hover:border-emerald-300 transition-all"
+            alt="avatar"
+          />
+          <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-medium">
+            <span>換照片</span>
+          </div>
+          <input ref="editAvatarInput" type="file" accept="image/*" class="hidden" @change="onEditAvatarFileChange">
+        </div>
+        <button @click="$refs.editAvatarInput.click()" class="text-[11px] text-emerald-300/90 hover:text-emerald-200 underline mb-2">
+          更換頭像照片
+        </button>
+
+        <h3 class="font-bold text-base text-emerald-100 mb-0.5">調整 {{ selectedMember.name }} 的狀態</h3>
+        <p class="text-xs text-emerald-400/80 mb-3.5">{{ currentMonth }}</p>
+        <div class="grid grid-cols-2 gap-2 mb-4 w-full">
           <button 
             v-for="col in columns" 
             :key="col.id"
