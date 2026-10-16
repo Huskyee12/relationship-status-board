@@ -121,4 +121,4 @@ git push origin main
 ---
 
 ## 📄 License
-本專案採 MIT 授權條款開放使用。
+版權所有 © 2026 Peggy Tsai (Huskyee12)，未經許可禁止轉載或商用。
