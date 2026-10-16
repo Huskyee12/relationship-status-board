@@ -383,3 +383,34 @@ const removeMember = async (id) => {
               await checkAndInherit(false);
             } else if (!exists) {
               // 雲端目前尚無此房間紀錄：純檢視模式，絕不自動覆寫雲端
+              isCloudMode.value = true;
+              isInitialSyncDone = true;
+              await checkAndInherit(false);
+            }
+          }, (err) => {
+            console.warn("雲端即時連線異常，切換至本機離線模式", err);
+            isCloudMode.value = false;
+            if (!isInitialSyncDone) {
+              isInitialSyncDone = true;
+              checkAndInherit(false);
+            }
+          });
+          return;
+        }
+      }
+
+      // 若未啟用 Firebase 則使用純本機模式
+      isCloudMode.value = false;
+      isInitialSyncDone = true;
+      await checkAndInherit(false);
+    });
+
+    return {
+      columns, currentMonth, isInherited, isCloudMode, isExporting,
+      selectedMember, showAddModal, newMember,
+      isEditingName, editingName, startEditName, saveMemberName,
+      getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
+      onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink
+    };
+  }
+}).mount('#app');
