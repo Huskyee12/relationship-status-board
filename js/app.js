@@ -280,15 +280,59 @@ createApp({
       isEditingName.value = false;
     };
 
-    // 成員登場/出生月份管理
-    const selectedMemberStartMonthFormatted = computed(() => {
-      if (!selectedMember.value || !selectedMember.value.startMonth) return '';
-      return selectedMember.value.startMonth.replace('/', '-');
+    // 成員登場/出生年份範圍 (1970 ~ 當前年份+2)
+    const availableYears = computed(() => {
+      const currentY = new Date().getFullYear();
+      const years = [];
+      for (let y = currentY + 2; y >= 1970; y--) {
+        years.push(y.toString());
+      }
+      return years;
     });
 
-    const updateMemberStartMonth = async (monthVal) => {
+    const editStartYear = ref('');
+    const editStartMonthNum = ref('');
+
+    // 點擊卡片開啟編輯彈窗，自動填入該成員現有的出生年月
+    const selectMemberToEdit = (member) => {
+      selectedMember.value = member;
+      isEditingName.value = false;
+      const memData = (roomData.value.members && roomData.value.members[member.id]) || member;
+      const startMonth = memData.startMonth || '';
+      selectedMember.value.startMonth = startMonth;
+      if (startMonth && startMonth.includes('/')) {
+        const parts = startMonth.split('/');
+        editStartYear.value = parts[0] || '';
+        editStartMonthNum.value = parts[1] || '';
+      } else {
+        editStartYear.value = '';
+        editStartMonthNum.value = '';
+      }
+    };
+
+    // 儲存修改的出生月份
+    const saveMemberStartMonth = async () => {
       if (!selectedMember.value) return;
-      const formatted = monthVal ? monthVal.replace('-', '/') : '';
+      if (editStartYear.value && editStartMonthNum.value) {
+        const formatted = `${editStartYear.value}/${editStartMonthNum.value}`;
+        await updateMemberStartMonth(formatted);
+      } else if (!editStartYear.value && !editStartMonthNum.value) {
+        await clearMemberStartMonth();
+      } else {
+        alert('請完整選擇「年份」與「月份」！');
+      }
+    };
+
+    // 清除出生月份限制
+    const clearMemberStartMonth = async () => {
+      editStartYear.value = '';
+      editStartMonthNum.value = '';
+      await updateMemberStartMonth('');
+    };
+
+    // 核心更新出生月份邏輯
+    const updateMemberStartMonth = async (formatted) => {
+      if (!selectedMember.value) return;
       const id = selectedMember.value.id;
       if (roomData.value.members && roomData.value.members[id]) {
         roomData.value.members[id].startMonth = formatted;
@@ -311,16 +355,25 @@ createApp({
       }
       await checkAndInherit(true);
 
-      // 若目前瀏覽的月份早於該成員設定的登場月份，關閉彈窗（因該成員在此月份隱藏）
-      if (formatted && currentMonth.value < formatted) {
-        selectedMember.value = null;
+      if (formatted) {
+        if (currentMonth.value < formatted) {
+          alert(`已設定 ${selectedMember.value.name} 的出生年月為 ${formatted}！\n由於目前看板為 ${currentMonth.value}（早於出生年月），該成員在此月份將自動隱藏。`);
+          selectedMember.value = null;
+        } else {
+          alert(`已成功將 ${selectedMember.value.name} 的出生年月設定為 ${formatted}！`);
+        }
+      } else {
+        alert(`已清除出生年月限制，${selectedMember.value.name} 現在在所有月份皆可見。`);
       }
     };
 
-    const newMemberStartMonthFormatted = ref('');
+    const newMemberYear = ref('');
+    const newMemberMonthNum = ref('');
 
     const openAddModal = () => {
-      newMemberStartMonthFormatted.value = currentMonth.value.replace('/', '-');
+      const parts = currentMonth.value.split('/');
+      newMemberYear.value = parts[0] || '';
+      newMemberMonthNum.value = parts[1] || '';
       showAddModal.value = true;
     };
 
@@ -330,9 +383,9 @@ createApp({
       const newId = 'm_' + Date.now();
       if (!roomData.value.members) roomData.value.members = {};
 
-      const startMonthVal = newMemberStartMonthFormatted.value 
-        ? newMemberStartMonthFormatted.value.replace('-', '/') 
-        : currentMonth.value;
+      const startMonthVal = (newMemberYear.value && newMemberMonthNum.value)
+        ? `${newMemberYear.value}/${newMemberMonthNum.value}`
+        : '';
 
       roomData.value.members[newId] = {
         id: newId,
@@ -343,8 +396,8 @@ createApp({
       if (!roomData.value.snapshots) roomData.value.snapshots = {};
       if (!roomData.value.snapshots[currentMonth.value]) roomData.value.snapshots[currentMonth.value] = {};
 
-      // 只有當前瀏覽月份 >= 登場月份時才在當前月份建立快照
-      if (currentMonth.value >= startMonthVal) {
+      // 只有當前瀏覽月份 >= 登場月份（或未設限制）時才在當前月份建立快照
+      if (!startMonthVal || currentMonth.value >= startMonthVal) {
         roomData.value.snapshots[currentMonth.value][newId] = {
           status: newMember.value.status || 'single',
           streak: 1
@@ -503,7 +556,9 @@ const removeMember = async (id) => {
       columns, currentMonth, isInherited, isCloudMode, isExporting,
       selectedMember, showAddModal, newMember, openAddModal,
       isEditingName, editingName, startEditName, saveMemberName,
-      selectedMemberStartMonthFormatted, updateMemberStartMonth, newMemberStartMonthFormatted,
+      availableYears, editStartYear, editStartMonthNum, selectMemberToEdit,
+      saveMemberStartMonth, clearMemberStartMonth, updateMemberStartMonth,
+      newMemberYear, newMemberMonthNum,
       getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
       onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink
     };
