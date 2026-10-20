@@ -215,6 +215,19 @@ createApp({
       await checkAndInherit(true);
     };
 
+    // 年月直接下拉選擇
+    const onYearSelectChange = async (val) => {
+      currentYear.value = parseInt(val, 10);
+      await checkAndInherit(true);
+      nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    };
+
+    const onMonthSelectChange = async (val) => {
+      currentMonthNum.value = parseInt(val, 10);
+      await checkAndInherit(true);
+      nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    };
+
     // 照片上傳壓縮（新增成員用）
     const onAvatarFileChange = async (event) => {
       const file = event.target.files[0];
@@ -382,6 +395,92 @@ createApp({
       } else {
         alert(`已清除出生年月限制，${selectedMember.value.name} 現在在所有月份皆可見。`);
       }
+    };
+
+    // 批次設定歷史狀態時段
+    const showBatchPeriod = ref(false);
+    const batchStartYear = ref(today.getFullYear().toString());
+    const batchStartMonth = ref((today.getMonth() + 1 < 10 ? '0' + (today.getMonth() + 1) : (today.getMonth() + 1)).toString());
+    const batchEndYear = ref(today.getFullYear().toString());
+    const batchEndMonth = ref((today.getMonth() + 1 < 10 ? '0' + (today.getMonth() + 1) : (today.getMonth() + 1)).toString());
+    const batchStatus = ref('single');
+
+    const toggleBatchPeriod = () => {
+      showBatchPeriod.value = !showBatchPeriod.value;
+      if (showBatchPeriod.value) {
+        batchStartYear.value = currentYear.value.toString();
+        batchStartMonth.value = currentMonthNum.value < 10 ? '0' + currentMonthNum.value : currentMonthNum.value.toString();
+        batchEndYear.value = currentYear.value.toString();
+        batchEndMonth.value = currentMonthNum.value < 10 ? '0' + currentMonthNum.value : currentMonthNum.value.toString();
+      }
+      nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    };
+
+    const applyBatchPeriod = async () => {
+      if (!selectedMember.value) return;
+      if (!batchStartYear.value || !batchStartMonth.value || !batchEndYear.value || !batchEndMonth.value) {
+        alert('請完整選擇起始與結束的年份與月份！');
+        return;
+      }
+
+      const startKey = `${batchStartYear.value}/${batchStartMonth.value}`;
+      const endKey = `${batchEndYear.value}/${batchEndMonth.value}`;
+
+      if (startKey > endKey) {
+        alert('起始月份不能晚於結束月份！');
+        return;
+      }
+
+      // 生成區間內的所有月份清單 (例如 2023/02 到 2025/01)
+      const months = [];
+      let [currY, currM] = startKey.split('/').map(Number);
+      const [targetY, targetM] = endKey.split('/').map(Number);
+
+      while (currY < targetY || (currY === targetY && currM <= targetM)) {
+        const mStr = currM < 10 ? '0' + currM : '' + currM;
+        months.push(`${currY}/${mStr}`);
+        currM++;
+        if (currM > 12) {
+          currM = 1;
+          currY++;
+        }
+      }
+
+      const memberId = selectedMember.value.id;
+      if (!roomData.value.snapshots) roomData.value.snapshots = {};
+      if (!roomData.value.members) roomData.value.members = {};
+
+      // 檢查是否需要調整出生/登場月份 (若設定的歷史區間早於出生月份，自動將出生月份往前推移)
+      const currentStartMonth = roomData.value.members[memberId]?.startMonth;
+      if (!currentStartMonth || startKey < currentStartMonth) {
+        roomData.value.members[memberId].startMonth = startKey;
+        selectedMember.value.startMonth = startKey;
+        editStartYear.value = batchStartYear.value;
+        editStartMonthNum.value = batchStartMonth.value;
+      }
+
+      // 批次填寫各月份的狀態快照
+      months.forEach(mKey => {
+        if (!roomData.value.snapshots[mKey]) {
+          roomData.value.snapshots[mKey] = {};
+        }
+        roomData.value.snapshots[mKey][memberId] = {
+          status: batchStatus.value,
+          streak: 1 // recalculateAllStreaks 會依全域歷史重新計算準確 streak
+        };
+      });
+
+      // 重新計算全域連勝
+      recalculateAllStreaks(roomData.value.snapshots, roomData.value.members);
+
+      if (window.BoardStorage) {
+        await window.BoardStorage.save(roomId.value, roomData.value);
+      }
+      await checkAndInherit(true);
+
+      const statusObj = columns.find(c => c.id === batchStatus.value);
+      const statusName = statusObj ? statusObj.name : batchStatus.value;
+      alert(`已成功將 ${selectedMember.value.name} 在 ${startKey} 至 ${endKey}（共 ${months.length} 個月）的狀態批次設定為「${statusName}」！\n連續月數已自動連動計算完成。`);
     };
 
     const newMemberYear = ref('');
@@ -583,6 +682,9 @@ const removeMember = async (id) => {
       saveMemberStartMonth, clearMemberStartMonth, updateMemberStartMonth,
       selectedMemberStartMonthFormatted, newMemberStartMonthFormatted,
       newMemberYear, newMemberMonthNum,
+      onYearSelectChange, onMonthSelectChange,
+      showBatchPeriod, toggleBatchPeriod,
+      batchStartYear, batchStartMonth, batchEndYear, batchEndMonth, batchStatus, applyBatchPeriod,
       getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
       onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink
     };
