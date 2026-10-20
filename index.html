@@ -39,18 +39,44 @@
       </div>
     </header>
 
-    <!-- 月份切換列 -->
-    <div class="w-full flex items-center justify-between bg-emerald-950/60 border border-white/10 rounded-xl px-4 py-2.5 mb-4 backdrop-blur-sm">
-      <button @click="changeMonth(-1)" class="p-1 hover:bg-white/10 rounded-lg text-emerald-200">
-        <i data-lucide="chevron-left" class="w-5 h-5"></i>
-      </button>
-      <div class="text-center">
-        <span class="font-mono text-lg font-bold tracking-widest text-emerald-100">{{ currentMonth }}</span>
-        <p v-if="isInherited" class="text-[10px] text-emerald-300/80 -mt-0.5">⚡ 已自動繼承前期狀態</p>
+    <!-- 月份切換列 (支援箭頭切換與年月直接下拉) -->
+    <div class="w-full flex flex-col items-center bg-emerald-950/60 border border-white/10 rounded-xl px-3 py-2 mb-4 backdrop-blur-sm shadow-md">
+      <div class="w-full flex items-center justify-between">
+        <button @click="changeMonth(-1)" title="上一月" class="p-1.5 hover:bg-white/10 active:scale-95 rounded-lg text-emerald-200 transition-all">
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </button>
+
+        <!-- 年月快速選單 -->
+        <div class="flex items-center gap-1.5">
+          <div class="relative">
+            <select 
+              :value="currentYear" 
+              @change="onYearSelectChange($event.target.value)"
+              class="appearance-none bg-emerald-900/80 hover:bg-emerald-900 border border-emerald-600/50 rounded-lg pl-2.5 pr-6 py-1 text-sm font-bold font-mono text-emerald-100 focus:outline-none focus:border-emerald-400 cursor-pointer shadow-sm transition-all"
+            >
+              <option v-for="y in availableYears" :key="y" :value="parseInt(y, 10)">{{ y }} 年</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-emerald-300 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+
+          <div class="relative">
+            <select 
+              :value="currentMonthNum" 
+              @change="onMonthSelectChange($event.target.value)"
+              class="appearance-none bg-emerald-900/80 hover:bg-emerald-900 border border-emerald-600/50 rounded-lg pl-2.5 pr-6 py-1 text-sm font-bold font-mono text-emerald-100 focus:outline-none focus:border-emerald-400 cursor-pointer shadow-sm transition-all"
+            >
+              <option v-for="m in 12" :key="m" :value="m">{{ m < 10 ? '0' + m : m }} 月</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-emerald-300 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+        </div>
+
+        <button @click="changeMonth(1)" title="下一月" class="p-1.5 hover:bg-white/10 active:scale-95 rounded-lg text-emerald-200 transition-all">
+          <i data-lucide="chevron-right" class="w-5 h-5"></i>
+        </button>
       </div>
-      <button @click="changeMonth(1)" class="p-1 hover:bg-white/10 rounded-lg text-emerald-200">
-        <i data-lucide="chevron-right" class="w-5 h-5"></i>
-      </button>
+
+      <p v-if="isInherited" class="text-[10px] text-emerald-300/80 mt-1">⚡ 已自動繼承前期狀態</p>
     </div>
 
     <!-- 看板主體容器 -->
@@ -186,6 +212,78 @@
           </div>
         </div>
 
+        <!-- 快速批次設定歷史狀態時段 -->
+        <div class="w-full bg-emerald-900/40 rounded-xl p-2.5 border border-emerald-700/50 mb-3 text-left">
+          <button 
+            type="button" 
+            @click="toggleBatchPeriod" 
+            class="w-full flex items-center justify-between text-xs font-semibold text-emerald-200 hover:text-white transition-colors"
+          >
+            <span class="flex items-center gap-1.5">
+              <span>⚡ 批次設定歷史狀態時段</span>
+            </span>
+            <span class="text-[11px] text-emerald-400 underline">
+              {{ showBatchPeriod ? '收合' : '展開設定' }}
+            </span>
+          </button>
+
+          <div v-if="showBatchPeriod" class="mt-2.5 pt-2 border-t border-emerald-700/40 text-xs flex flex-col gap-2">
+            <p class="text-[10px] text-emerald-300/80">快速填寫跨月份/跨年份歷史，連續月數將自動重算</p>
+
+            <!-- 起始年月 -->
+            <div class="flex items-center justify-between gap-1.5">
+              <span class="text-[11px] text-emerald-200 font-medium whitespace-nowrap">起始：</span>
+              <div class="flex gap-1 flex-1">
+                <select v-model="batchStartYear" class="flex-1 bg-emerald-950 border border-emerald-600/70 rounded px-1.5 py-1 text-xs text-white focus:outline-none">
+                  <option v-for="y in availableYears" :key="y" :value="y">{{ y }} 年</option>
+                </select>
+                <select v-model="batchStartMonth" class="w-16 bg-emerald-950 border border-emerald-600/70 rounded px-1.5 py-1 text-xs text-white focus:outline-none">
+                  <option v-for="m in 12" :key="m" :value="m < 10 ? '0' + m : '' + m">{{ m }} 月</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 結束年月 -->
+            <div class="flex items-center justify-between gap-1.5">
+              <span class="text-[11px] text-emerald-200 font-medium whitespace-nowrap">結束：</span>
+              <div class="flex gap-1 flex-1">
+                <select v-model="batchEndYear" class="flex-1 bg-emerald-950 border border-emerald-600/70 rounded px-1.5 py-1 text-xs text-white focus:outline-none">
+                  <option v-for="y in availableYears" :key="y" :value="y">{{ y }} 年</option>
+                </select>
+                <select v-model="batchEndMonth" class="w-16 bg-emerald-950 border border-emerald-600/70 rounded px-1.5 py-1 text-xs text-white focus:outline-none">
+                  <option v-for="m in 12" :key="m" :value="m < 10 ? '0' + m : '' + m">{{ m }} 月</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 該時段狀態 -->
+            <div class="flex items-center justify-between gap-1.5">
+              <span class="text-[11px] text-emerald-200 font-medium whitespace-nowrap">狀態：</span>
+              <div class="grid grid-cols-4 gap-1 flex-1">
+                <button 
+                  v-for="col in columns" 
+                  :key="col.id"
+                  type="button"
+                  @click="batchStatus = col.id"
+                  :class="batchStatus === col.id ? 'bg-emerald-500 text-emerald-950 font-bold' : 'bg-emerald-950 text-emerald-200 hover:bg-emerald-800'"
+                  class="py-1 rounded text-[11px] border border-emerald-600/40 transition-all text-center"
+                >
+                  {{ col.name }}
+                </button>
+              </div>
+            </div>
+
+            <!-- 套用按鈕 -->
+            <button 
+              type="button" 
+              @click="applyBatchPeriod" 
+              class="w-full mt-1 py-1.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-emerald-950 font-bold rounded-lg text-xs transition-all shadow"
+            >
+              確認套用此歷史時段
+            </button>
+          </div>
+        </div>
+
         <p class="text-xs text-emerald-400/80 mb-3.5">調整 {{ currentMonth }} 的狀態</p>
         <div class="grid grid-cols-2 gap-2 mb-4 w-full">
           <button 
@@ -251,10 +349,10 @@
 
   </div>
 
-  <!-- 按照相依順序載入模組 (加 ?v=3 避免瀏覽器快取) -->
+  <!-- 按照相依順序載入模組 (加 ?v=4 避免瀏覽器快取) -->
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
-  <script src="js/storage.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script src="js/storage.js?v=4"></script>
+  <script src="js/app.js?v=4"></script>
 </body>
 </html>
