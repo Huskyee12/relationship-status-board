@@ -1,4 +1,4 @@
-const { createApp, ref, computed, onMounted, nextTick } = Vue;
+const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
 
 createApp({
   setup() {
@@ -293,22 +293,34 @@ createApp({
     const editStartYear = ref('');
     const editStartMonthNum = ref('');
 
+    // 監聽 selectedMember，確保無論透過何種方式開啟彈窗，皆自動同步出生年月選單
+    watch(selectedMember, (newVal) => {
+      if (newVal) {
+        isEditingName.value = false;
+        const memData = (roomData.value.members && roomData.value.members[newVal.id]) || newVal;
+        const startMonth = memData.startMonth || '';
+        selectedMember.value.startMonth = startMonth;
+        if (startMonth && startMonth.includes('/')) {
+          const parts = startMonth.split('/');
+          editStartYear.value = parts[0] || '';
+          editStartMonthNum.value = parts[1] || '';
+        } else {
+          editStartYear.value = '';
+          editStartMonthNum.value = '';
+        }
+      }
+    });
+
     // 點擊卡片開啟編輯彈窗，自動填入該成員現有的出生年月
     const selectMemberToEdit = (member) => {
       selectedMember.value = member;
-      isEditingName.value = false;
-      const memData = (roomData.value.members && roomData.value.members[member.id]) || member;
-      const startMonth = memData.startMonth || '';
-      selectedMember.value.startMonth = startMonth;
-      if (startMonth && startMonth.includes('/')) {
-        const parts = startMonth.split('/');
-        editStartYear.value = parts[0] || '';
-        editStartMonthNum.value = parts[1] || '';
-      } else {
-        editStartYear.value = '';
-        editStartMonthNum.value = '';
-      }
     };
+
+    // 相容性計算屬性（支援舊版 HTML 緩存）
+    const selectedMemberStartMonthFormatted = computed(() => {
+      if (!selectedMember.value || !selectedMember.value.startMonth) return '';
+      return selectedMember.value.startMonth.replace('/', '-');
+    });
 
     // 儲存修改的出生月份
     const saveMemberStartMonth = async () => {
@@ -330,9 +342,14 @@ createApp({
       await updateMemberStartMonth('');
     };
 
-    // 核心更新出生月份邏輯
-    const updateMemberStartMonth = async (formatted) => {
+    // 核心更新出生月份邏輯（相容傳入字串或原生事件）
+    const updateMemberStartMonth = async (inputVal) => {
       if (!selectedMember.value) return;
+      let raw = inputVal;
+      if (inputVal && typeof inputVal === 'object' && inputVal.target) {
+        raw = inputVal.target.value;
+      }
+      const formatted = raw ? raw.replace('-', '/') : '';
       const id = selectedMember.value.id;
       if (roomData.value.members && roomData.value.members[id]) {
         roomData.value.members[id].startMonth = formatted;
@@ -369,6 +386,12 @@ createApp({
 
     const newMemberYear = ref('');
     const newMemberMonthNum = ref('');
+    const newMemberStartMonthFormatted = computed(() => {
+      if (newMemberYear.value && newMemberMonthNum.value) {
+        return `${newMemberYear.value}-${newMemberMonthNum.value}`;
+      }
+      return '';
+    });
 
     const openAddModal = () => {
       const parts = currentMonth.value.split('/');
@@ -558,6 +581,7 @@ const removeMember = async (id) => {
       isEditingName, editingName, startEditName, saveMemberName,
       availableYears, editStartYear, editStartMonthNum, selectMemberToEdit,
       saveMemberStartMonth, clearMemberStartMonth, updateMemberStartMonth,
+      selectedMemberStartMonthFormatted, newMemberStartMonthFormatted,
       newMemberYear, newMemberMonthNum,
       getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
       onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink
