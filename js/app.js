@@ -47,10 +47,19 @@ createApp({
       return `${y}/${m < 10 ? '0' + m : m}`;
     };
 
+    // 判斷成員在指定月份是否已登場 / 已出生
+    const isMemberActiveInMonth = (member, monthKey) => {
+      if (!member) return false;
+      if (member.startMonth && monthKey < member.startMonth) {
+        return false;
+      }
+      return true;
+    };
+
     // 重新計算整條歷史時間軸的所有連續月數 (溯及既往：補填過去月份會連動更新後續所有月份)
     const recalculateAllStreaks = (snapshots, members) => {
       if (!snapshots || !members) return;
-      // 依時間從小到大排序 (例如 ["2026/01", "2026/02", ..., "2026/10", "2026/11"])
+      // 依時間從小到大排序 (例如 ["1995/05", ..., "2026/10", "2026/11"])
       const sortedMonths = Object.keys(snapshots).sort();
 
       sortedMonths.forEach(monthKey => {
@@ -60,8 +69,22 @@ createApp({
         if (!currSnapshot) return;
 
         Object.keys(members).forEach(memberId => {
+          const mem = members[memberId];
+          // 若早於出生/登場月份，從快照中移除
+          if (mem && mem.startMonth && monthKey < mem.startMonth) {
+            delete currSnapshot[memberId];
+            return;
+          }
+
           if (!currSnapshot[memberId]) return;
           const currStatus = currSnapshot[memberId].status || 'single';
+
+          // 若剛好是登場第一個月，streak 起算為 1
+          if (mem && mem.startMonth && monthKey === mem.startMonth) {
+            currSnapshot[memberId].streak = 1;
+            return;
+          }
+
           const prevRecord = prevSnapshot ? prevSnapshot[memberId] : null;
 
           if (prevRecord && prevRecord.status === currStatus) {
@@ -91,6 +114,9 @@ createApp({
         const inherited = {};
 
         Object.keys(members).forEach(id => {
+          const mem = members[id];
+          if (!isMemberActiveInMonth(mem, currentKey)) return;
+
           const prev = prevMonthKey && snapshots[prevMonthKey] ? snapshots[prevMonthKey][id] : null;
           inherited[id] = {
             status: prev ? prev.status : 'single',
@@ -105,16 +131,27 @@ createApp({
         }
       } else {
         isInherited.value = false;
-        // 確保既有月份快照中包含所有既有成員（新加入成員若未登記該月份則預設補齊）
-        let hasNewInSnapshot = false;
+        let hasChanges = false;
         Object.keys(members).forEach(id => {
-          if (!snapshots[currentKey][id]) {
-            snapshots[currentKey][id] = { status: 'single', streak: 1 };
-            hasNewInSnapshot = true;
+          const mem = members[id];
+          const active = isMemberActiveInMonth(mem, currentKey);
+
+          if (!active) {
+            // 早於出生/登場月份，從快照中移除
+            if (snapshots[currentKey][id]) {
+              delete snapshots[currentKey][id];
+              hasChanges = true;
+            }
+          } else {
+            // 確保既有月份快照中包含所有已登場成員（若未登記該月份則預設補齊）
+            if (!snapshots[currentKey][id]) {
+              snapshots[currentKey][id] = { status: 'single', streak: 1 };
+              hasChanges = true;
+            }
           }
         });
         recalculateAllStreaks(snapshots, members);
-        if (hasNewInSnapshot && canSave && window.BoardStorage) {
+        if (hasChanges && canSave && window.BoardStorage) {
           await window.BoardStorage.save(roomId.value, roomData.value);
         }
       }
@@ -127,7 +164,11 @@ createApp({
       const currentSnapshot = (roomData.value.snapshots && roomData.value.snapshots[currentMonth.value]) || {};
       const members = roomData.value.members || {};
       return Object.keys(members)
-        .filter(id => (currentSnapshot[id]?.status || 'single') === statusId)
+        .filter(id => {
+          const mem = members[id];
+          if (!isMemberActiveInMonth(mem, currentMonth.value)) return false;
+          return (currentSnapshot[id]?.status || 'single') === statusId;
+        })
         .map(id => ({
           ...members[id],
           status: currentSnapshot[id]?.status || 'single',
@@ -239,23 +280,76 @@ createApp({
       isEditingName.value = false;
     };
 
+    // 成員登場/出生月份管理
+    const selectedMemberStartMonthFormatted = computed(() => {
+      if (!selectedMember.value || !selectedMember.value.startMonth) return '';
+      return selectedMember.value.startMonth.replace('/', '-');
+    });
+
+    const updateMemberStartMonth = async (monthVal) => {
+      if (!selectedMember.value) return;
+      const formatted = monthVal ? monthVal.replace('-', '/') : '';
+      const id = selectedMember.value.id;
+      if (roomData.value.members && roomData.value.members[id]) {
+        roomData.value.members[id].startMonth = formatted;
+      }
+      selectedMember.value.startMonth = formatted;
+
+      // 若設定了登場月份，自動清除歷史中早於該月份的髒快照紀錄
+      if (formatted && roomData.value.snapshots) {
+        Object.keys(roomData.value.snapshots).forEach(m => {
+          if (m < formatted && roomData.value.snapshots[m] && roomData.value.snapshots[m][id]) {
+            delete roomData.value.snapshots[m][id];
+          }
+        });
+      }
+
+      recalculateAllStreaks(roomData.value.snapshots, roomData.value.members);
+
+      if (window.BoardStorage) {
+        await window.BoardStorage.save(roomId.value, roomData.value);
+      }
+      await checkAndInherit(true);
+
+      // 若目前瀏覽的月份早於該成員設定的登場月份，關閉彈窗（因該成員在此月份隱藏）
+      if (formatted && currentMonth.value < formatted) {
+        selectedMember.value = null;
+      }
+    };
+
+    const newMemberStartMonthFormatted = ref('');
+
+    const openAddModal = () => {
+      newMemberStartMonthFormatted.value = currentMonth.value.replace('/', '-');
+      showAddModal.value = true;
+    };
+
     // 新增成員
     const addMember = async () => {
       if (!newMember.value.name.trim()) return;
       const newId = 'm_' + Date.now();
       if (!roomData.value.members) roomData.value.members = {};
 
+      const startMonthVal = newMemberStartMonthFormatted.value 
+        ? newMemberStartMonthFormatted.value.replace('-', '/') 
+        : currentMonth.value;
+
       roomData.value.members[newId] = {
         id: newId,
         name: newMember.value.name.trim(),
-        avatar: newMember.value.avatar || ''
+        avatar: newMember.value.avatar || '',
+        startMonth: startMonthVal
       };
       if (!roomData.value.snapshots) roomData.value.snapshots = {};
       if (!roomData.value.snapshots[currentMonth.value]) roomData.value.snapshots[currentMonth.value] = {};
-      roomData.value.snapshots[currentMonth.value][newId] = {
-        status: newMember.value.status || 'single',
-        streak: 1
-      };
+
+      // 只有當前瀏覽月份 >= 登場月份時才在當前月份建立快照
+      if (currentMonth.value >= startMonthVal) {
+        roomData.value.snapshots[currentMonth.value][newId] = {
+          status: newMember.value.status || 'single',
+          streak: 1
+        };
+      }
       recalculateAllStreaks(roomData.value.snapshots, roomData.value.members);
       newMember.value = { name: '', avatar: '', status: 'single' };
       showAddModal.value = false;
@@ -407,8 +501,9 @@ const removeMember = async (id) => {
 
     return {
       columns, currentMonth, isInherited, isCloudMode, isExporting,
-      selectedMember, showAddModal, newMember,
+      selectedMember, showAddModal, newMember, openAddModal,
       isEditingName, editingName, startEditName, saveMemberName,
+      selectedMemberStartMonthFormatted, updateMemberStartMonth, newMemberStartMonthFormatted,
       getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
       onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink
     };
