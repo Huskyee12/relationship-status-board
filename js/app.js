@@ -213,6 +213,7 @@ createApp({
       currentMonthNum.value = m;
       currentYear.value = y;
       await checkAndInherit(true);
+      nextTick(() => { if (window.lucide) lucide.createIcons(); });
     };
 
     // 年月直接下拉選擇
@@ -590,10 +591,13 @@ const removeMember = async (id) => {
     // 限動圖片匯出
     const exportStory = async () => {
       isExporting.value = true;
+      await nextTick();
       if (window.BoardUtils) {
         await window.BoardUtils.exportToStoryImage('capture-board', currentMonth.value);
       }
       isExporting.value = false;
+      await nextTick();
+      if (window.lucide) lucide.createIcons();
     };
 
     const copyRoomLink = () => {
@@ -682,6 +686,7 @@ const removeMember = async (id) => {
       saveMemberStartMonth, clearMemberStartMonth, updateMemberStartMonth,
       selectedMemberStartMonthFormatted, newMemberStartMonthFormatted,
       newMemberYear, newMemberMonthNum,
+      currentYear, currentMonthNum,
       onYearSelectChange, onMonthSelectChange,
       showBatchPeriod, toggleBatchPeriod,
       batchStartYear, batchStartMonth, batchEndYear, batchEndMonth, batchStatus, applyBatchPeriod,
