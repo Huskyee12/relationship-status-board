@@ -71,7 +71,7 @@
               v-for="member in getMembersByStatus(col.id)" 
               :key="member.id"
               :data-id="member.id"
-              @click="selectedMember = member"
+              @click="selectMemberToEdit(member)"
               class="member-card cursor-pointer flex flex-col items-center group relative transition-transform active:scale-95"
             >
               <div class="relative">
@@ -112,7 +112,7 @@
       </div>
     </div>
 
-    <!-- 彈窗：調整狀態、頭像與暱稱 -->
+    <!-- 彈窗：調整狀態、頭像、暱稱與出生月份 -->
     <div v-if="selectedMember" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3" @click.self="selectedMember = null; isEditingName = false">
       <div class="bg-emerald-950 border border-emerald-700/50 rounded-2xl p-5 w-full max-w-xs text-center shadow-2xl flex flex-col items-center">
         <!-- 頭像與更換按鈕 -->
@@ -153,18 +153,37 @@
           </div>
         </div>
 
-        <!-- 出生/登場年月設定 -->
-        <div class="w-full flex items-center justify-between bg-emerald-900/50 rounded-xl px-2.5 py-1.5 border border-emerald-700/50 mb-3 text-left">
-          <div class="pr-2">
-            <div class="text-[11px] text-emerald-200 font-medium">出生/登場月份</div>
-            <div class="text-[9px] text-emerald-400/80">早於此月自動隱藏</div>
+        <!-- 出生/登場年月設定（下拉選單相容所有瀏覽器） -->
+        <div class="w-full bg-emerald-900/60 rounded-xl p-3 border border-emerald-700/60 mb-3 text-left">
+          <div class="flex items-center justify-between mb-1">
+            <div class="text-xs text-emerald-200 font-semibold">
+              📅 出生 / 登場月份
+            </div>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/40">
+              {{ selectedMember.startMonth ? selectedMember.startMonth : '未設定 (全月份可見)' }}
+            </span>
           </div>
-          <input 
-            type="month" 
-            :value="selectedMemberStartMonthFormatted" 
-            @change="updateMemberStartMonth($event.target.value)"
-            class="bg-emerald-950 border border-emerald-500/50 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-emerald-300"
-          />
+          <p class="text-[10px] text-emerald-400/80 mb-2">早於此月份該成員將於看板自動隱藏</p>
+
+          <div class="flex items-center gap-1.5">
+            <select v-model="editStartYear" class="flex-1 bg-emerald-950 border border-emerald-600/70 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400">
+              <option value="">選擇年份</option>
+              <option v-for="y in availableYears" :key="y" :value="y">{{ y }} 年</option>
+            </select>
+
+            <select v-model="editStartMonthNum" class="w-20 bg-emerald-950 border border-emerald-600/70 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400">
+              <option value="">月份</option>
+              <option v-for="m in 12" :key="m" :value="m < 10 ? '0' + m : '' + m">{{ m }} 月</option>
+            </select>
+
+            <button @click="saveMemberStartMonth" class="bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-xs px-2.5 py-1.5 rounded-lg whitespace-nowrap">
+              儲存
+            </button>
+
+            <button v-if="selectedMember.startMonth" @click="clearMemberStartMonth" class="text-rose-300 hover:text-rose-200 text-xs px-1 whitespace-nowrap">
+              清除
+            </button>
+          </div>
         </div>
 
         <p class="text-xs text-emerald-400/80 mb-3.5">調整 {{ currentMonth }} 的狀態</p>
@@ -204,12 +223,17 @@
           </div>
           <div>
             <label class="block text-xs text-emerald-300/80 mb-1">出生 / 登場月份 (選填)</label>
-            <input 
-              v-model="newMemberStartMonthFormatted" 
-              type="month" 
-              class="w-full bg-emerald-900/60 border border-emerald-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400"
-            >
-            <p class="text-[10px] text-emerald-400/60 mt-0.5">早於此月份將於看板自動隱藏</p>
+            <div class="flex items-center gap-2">
+              <select v-model="newMemberYear" class="flex-1 bg-emerald-900/60 border border-emerald-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+                <option value="">年份 (預設為當前)</option>
+                <option v-for="y in availableYears" :key="y" :value="y">{{ y }} 年</option>
+              </select>
+              <select v-model="newMemberMonthNum" class="w-24 bg-emerald-900/60 border border-emerald-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+                <option value="">月份</option>
+                <option v-for="m in 12" :key="m" :value="m < 10 ? '0' + m : '' + m">{{ m }} 月</option>
+              </select>
+            </div>
+            <p class="text-[10px] text-emerald-400/60 mt-1">早於此月份將於看板自動隱藏</p>
           </div>
           <div>
             <label class="block text-xs text-emerald-300/80 mb-1">初始狀態</label>
@@ -227,10 +251,10 @@
 
   </div>
 
-  <!-- 按照相依順序載入模組 -->
+  <!-- 按照相依順序載入模組 (加 ?v=3 避免瀏覽器快取) -->
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
-  <script src="js/storage.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/storage.js?v=3"></script>
+  <script src="js/app.js?v=3"></script>
 </body>
 </html>
