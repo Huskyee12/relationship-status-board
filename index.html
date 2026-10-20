@@ -39,50 +39,61 @@
       </div>
     </header>
 
-    <!-- 月份切換列 (支援箭頭切換與年月直接下拉) -->
-    <div class="w-full flex flex-col items-center bg-emerald-950/60 border border-white/10 rounded-xl px-3 py-2 mb-4 backdrop-blur-sm shadow-md">
-      <div class="w-full flex items-center justify-between">
-        <button @click="changeMonth(-1)" title="上一月" class="p-1.5 hover:bg-white/10 active:scale-95 rounded-lg text-emerald-200 transition-all">
-          <i data-lucide="chevron-left" class="w-5 h-5"></i>
-        </button>
-
-        <!-- 年月快速選單 -->
-        <div class="flex items-center gap-1.5">
-          <div class="relative">
-            <select 
-              :value="currentYear" 
-              @change="onYearSelectChange($event.target.value)"
-              class="appearance-none bg-emerald-900/80 hover:bg-emerald-900 border border-emerald-600/50 rounded-lg pl-2.5 pr-6 py-1 text-sm font-bold font-mono text-emerald-100 focus:outline-none focus:border-emerald-400 cursor-pointer shadow-sm transition-all"
-            >
-              <option v-for="y in availableYears" :key="y" :value="parseInt(y, 10)">{{ y }} 年</option>
-            </select>
-            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-emerald-300 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-          </div>
-
-          <div class="relative">
-            <select 
-              :value="currentMonthNum" 
-              @change="onMonthSelectChange($event.target.value)"
-              class="appearance-none bg-emerald-900/80 hover:bg-emerald-900 border border-emerald-600/50 rounded-lg pl-2.5 pr-6 py-1 text-sm font-bold font-mono text-emerald-100 focus:outline-none focus:border-emerald-400 cursor-pointer shadow-sm transition-all"
-            >
-              <option v-for="m in 12" :key="m" :value="m">{{ m < 10 ? '0' + m : m }} 月</option>
-            </select>
-            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-emerald-300 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-          </div>
-        </div>
-
-        <button @click="changeMonth(1)" title="下一月" class="p-1.5 hover:bg-white/10 active:scale-95 rounded-lg text-emerald-200 transition-all">
-          <i data-lucide="chevron-right" class="w-5 h-5"></i>
-        </button>
-      </div>
-
-      <p v-if="isInherited" class="text-[10px] text-emerald-300/80 mt-1">⚡ 已自動繼承前期狀態</p>
-    </div>
-
     <!-- 看板主體容器 -->
     <div id="capture-board" class="w-full rounded-2xl p-4 sm:p-5 flex flex-col shadow-2xl relative border border-white/15" style="background-color: var(--board-bg); min-height: 520px;">
-      <div class="text-center mb-5">
-        <h2 class="font-mono text-2xl font-bold tracking-widest text-emerald-50 drop-shadow-sm">{{ currentMonth }}</h2>
+      <!-- 看板頂部：年月切換與標題 (隱形透明選單與左右箭頭) -->
+      <div class="text-center mb-4 sm:mb-5">
+        <div class="inline-flex items-center justify-center gap-2 sm:gap-3">
+          <button 
+            @click="changeMonth(-1)" 
+            :class="{ 'invisible': isExporting }"
+            class="p-1 hover:bg-white/10 active:scale-90 rounded-lg text-emerald-200 hover:text-white transition-all cursor-pointer" 
+            title="上一月"
+          >
+            <i data-lucide="chevron-left" class="w-6 h-6"></i>
+          </button>
+
+          <div class="flex items-center gap-1 font-mono text-2xl sm:text-3xl font-bold tracking-widest text-emerald-50 drop-shadow-sm select-none">
+            <!-- 年份 (外觀為純文字，點擊展開原生年份下拉選單) -->
+            <div class="relative inline-block cursor-pointer group">
+              <span class="hover:text-emerald-300 transition-colors border-b border-transparent group-hover:border-emerald-400/60 pb-0.5" title="點擊切換年份">{{ currentYear }}</span>
+              <select 
+                :value="currentYear" 
+                @change="onYearSelectChange($event.target.value)"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base bg-emerald-950 text-white"
+                title="選擇年份"
+              >
+                <option v-for="y in availableYears" :key="y" :value="parseInt(y, 10)">{{ y }} 年</option>
+              </select>
+            </div>
+
+            <span class="text-emerald-400/70 px-0.5">/</span>
+
+            <!-- 月份 (外觀為純文字，點擊展開原生月份下拉選單) -->
+            <div class="relative inline-block cursor-pointer group">
+              <span class="hover:text-emerald-300 transition-colors border-b border-transparent group-hover:border-emerald-400/60 pb-0.5" title="點擊切換月份">{{ currentMonthNum < 10 ? '0' + currentMonthNum : currentMonthNum }}</span>
+              <select 
+                :value="currentMonthNum" 
+                @change="onMonthSelectChange($event.target.value)"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base bg-emerald-950 text-white"
+                title="選擇月份"
+              >
+                <option v-for="m in 12" :key="m" :value="m">{{ m < 10 ? '0' + m : m }} 月</option>
+              </select>
+            </div>
+          </div>
+
+          <button 
+            @click="changeMonth(1)" 
+            :class="{ 'invisible': isExporting }"
+            class="p-1 hover:bg-white/10 active:scale-90 rounded-lg text-emerald-200 hover:text-white transition-all cursor-pointer" 
+            title="下一月"
+          >
+            <i data-lucide="chevron-right" class="w-6 h-6"></i>
+          </button>
+        </div>
+
+        <p v-show="isInherited && !isExporting" class="text-[10px] text-emerald-300/80 mt-1">⚡ 已自動繼承前期狀態</p>
       </div>
 
       <!-- 四欄狀態看板 -->
@@ -349,10 +360,10 @@
 
   </div>
 
-  <!-- 按照相依順序載入模組 (加 ?v=4 避免瀏覽器快取) -->
+  <!-- 按照相依順序載入模組 (加 ?v=5 避免瀏覽器快取) -->
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
-  <script src="js/storage.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
+  <script src="js/storage.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
 </body>
 </html>
