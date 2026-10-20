@@ -63,7 +63,7 @@ window.BoardStorage = {
     const members = data.members || {};
     const snapshots = data.snapshots || {};
 
-    let csvContent = "\uFEFF月份,成員姓名,狀態,持續月數,頭像資料\n";
+    let csvContent = "\uFEFF月份,成員姓名,狀態,持續月數,頭像資料,登場月份\n";
 
     Object.keys(snapshots).sort().forEach(month => {
       const monthData = snapshots[month] || {};
@@ -72,8 +72,9 @@ window.BoardStorage = {
         const statusText = statusMap[monthData[memberId].status] || monthData[memberId].status;
         const streak = monthData[memberId].streak || 1;
         const avatar = (mem.avatar || '').replace(/"/g, '""'); // CSV 跳脫雙引號
+        const startMonth = mem.startMonth || '';
         
-        csvContent += `"${month}","${mem.name}","${statusText}","${streak}","${avatar}"\n`;
+        csvContent += `"${month}","${mem.name}","${statusText}","${streak}","${avatar}","${startMonth}"\n`;
       });
     });
 
@@ -114,7 +115,7 @@ window.BoardStorage = {
             }
 
             if (matches.length >= 4) {
-              const [month, name, statusText, streak, avatar] = matches;
+              const [month, name, statusText, streak, avatar, startMonth] = matches;
               if (!month || !name) continue;
 
               // 以姓名建立穩定的 member ID
@@ -123,8 +124,11 @@ window.BoardStorage = {
                 resultData.members[memberId] = {
                   id: memberId,
                   name: name,
-                  avatar: avatar || ''
+                  avatar: avatar || '',
+                  startMonth: startMonth || ''
                 };
+              } else if (startMonth && !resultData.members[memberId].startMonth) {
+                resultData.members[memberId].startMonth = startMonth;
               }
 
               if (!resultData.snapshots[month]) {
