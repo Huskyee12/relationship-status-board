@@ -5,38 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>感情狀態看板</title>
   
-  <!-- Tailwind CSS -->
+  <!-- CSS 框架與圖示 CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Vue 3 全域版 -->
   <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
-  <!-- SortableJS -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-  <!-- Canvas Confetti -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
-  <!-- html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
 
-  <!-- Firebase 9+ 相容模式 (無需 ES Module import，穩定性最高) -->
+  <!-- Firebase 函式庫 -->
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
 
-  <style>
-    :root {
-      --board-bg: #23473f;
-      --board-inner: #1c3b34;
-    }
-    body {
-      background-color: #121f1c;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    .avatar-glow {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-    }
-  </style>
+  <!-- 獨立樣式檔 -->
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="text-white min-h-screen flex flex-col items-center p-3 sm:p-6">
   <div id="app" class="w-full max-w-md flex flex-col items-center">
@@ -44,62 +26,89 @@
     <!-- 頂部工具列 -->
     <header class="w-full flex items-center justify-between mb-4 px-2">
       <div class="flex items-center gap-2">
-        <span class="w-2.5 h-2.5 rounded-full" :class="isCloudMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'"></span>
+        <span class="w-2.5 h-2.5 rounded-full" :class="isCloudMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'" :title="isCloudMode ? '雲端同步中 (Firebase)' : '本機離線模式 (LocalStorage)'"></span>
         <h1 class="text-lg font-bold tracking-wider text-emerald-100">感情狀態看板</h1>
-        <span v-if="!isCloudMode" class="text-[10px] text-amber-300/80 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-600/30">本機模式</span>
       </div>
       <div class="flex gap-2">
         <button @click="copyRoomLink" class="bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-600/40 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition-all">
           <i data-lucide="share-2" class="w-3.5 h-3.5"></i> 分享
         </button>
         <button @click="exportStory" :disabled="isExporting" class="bg-emerald-600 hover:bg-emerald-500 text-xs px-2.5 py-1.5 rounded-lg font-medium flex items-center gap-1 shadow-md transition-all">
-          <i data-lucide="download" class="w-3.5 h-3.5"></i> {{ isExporting ? '生成中...' : '匯出' }}
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> {{ isExporting ? '生成中...' : '匯出限動' }}
         </button>
       </div>
     </header>
 
-    <!-- 月份切換列 -->
-    <div class="w-full flex items-center justify-between bg-emerald-950/60 border border-white/10 rounded-xl px-4 py-2.5 mb-4 backdrop-blur-sm">
-      <button @click="changeMonth(-1)" class="p-1 hover:bg-white/10 rounded-lg text-emerald-200">
-        <i data-lucide="chevron-left" class="w-5 h-5"></i>
-      </button>
-      <div class="text-center">
-        <span class="font-mono text-lg font-bold tracking-widest text-emerald-100">{{ currentMonth }}</span>
-        <p v-if="isInherited" class="text-[10px] text-emerald-300/80 -mt-0.5">⚡ 已自動繼承前期狀態</p>
-      </div>
-      <button @click="changeMonth(1)" class="p-1 hover:bg-white/10 rounded-lg text-emerald-200">
-        <i data-lucide="chevron-right" class="w-5 h-5"></i>
-      </button>
-    </div>
-
-    <!-- 看板主體 -->
+    <!-- 看板主體容器 -->
     <div id="capture-board" class="w-full rounded-2xl p-4 sm:p-5 flex flex-col shadow-2xl relative border border-white/15" style="background-color: var(--board-bg); min-height: 520px;">
-      
-      <div class="text-center mb-5">
-        <h2 class="font-mono text-2xl font-bold tracking-widest text-emerald-50 drop-shadow-sm">{{ currentMonth }}</h2>
+      <!-- 看板頂部：年月切換與標題 (隱形透明選單與左右箭頭) -->
+      <div class="text-center mb-4 sm:mb-5">
+        <div class="inline-flex items-center justify-center gap-2 sm:gap-3">
+          <button 
+            @click="changeMonth(-1)" 
+            :class="{ 'invisible': isExporting }"
+            class="p-1 hover:bg-white/10 active:scale-90 rounded-lg text-emerald-200 hover:text-white transition-all cursor-pointer" 
+            title="上一月"
+          >
+            <i data-lucide="chevron-left" class="w-6 h-6"></i>
+          </button>
+
+          <div class="flex items-center gap-1 font-mono text-2xl sm:text-3xl font-bold tracking-widest text-emerald-50 drop-shadow-sm select-none">
+            <!-- 年份 (外觀為純文字，點擊展開原生年份下拉選單) -->
+            <div class="relative inline-block cursor-pointer group">
+              <span class="hover:text-emerald-300 transition-colors border-b border-transparent group-hover:border-emerald-400/60 pb-0.5" title="點擊切換年份">{{ currentYear }}</span>
+              <select 
+                :value="currentYear" 
+                @change="onYearSelectChange($event.target.value)"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base bg-emerald-950 text-white"
+                title="選擇年份"
+              >
+                <option v-for="y in availableYears" :key="y" :value="parseInt(y, 10)">{{ y }} 年</option>
+              </select>
+            </div>
+
+            <span class="text-emerald-400/70 px-0.5">/</span>
+
+            <!-- 月份 (外觀為純文字，點擊展開原生月份下拉選單) -->
+            <div class="relative inline-block cursor-pointer group">
+              <span class="hover:text-emerald-300 transition-colors border-b border-transparent group-hover:border-emerald-400/60 pb-0.5" title="點擊切換月份">{{ currentMonthNum < 10 ? '0' + currentMonthNum : currentMonthNum }}</span>
+              <select 
+                :value="currentMonthNum" 
+                @change="onMonthSelectChange($event.target.value)"
+                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-base bg-emerald-950 text-white"
+                title="選擇月份"
+              >
+                <option v-for="m in 12" :key="m" :value="m">{{ m < 10 ? '0' + m : m }} 月</option>
+              </select>
+            </div>
+          </div>
+
+          <button 
+            @click="changeMonth(1)" 
+            :class="{ 'invisible': isExporting }"
+            class="p-1 hover:bg-white/10 active:scale-90 rounded-lg text-emerald-200 hover:text-white transition-all cursor-pointer" 
+            title="下一月"
+          >
+            <i data-lucide="chevron-right" class="w-6 h-6"></i>
+          </button>
+        </div>
+
+        <p v-show="isInherited && !isExporting" class="text-[10px] text-emerald-300/80 mt-1">⚡ 已自動繼承前期狀態</p>
       </div>
 
       <!-- 四欄狀態看板 -->
       <div class="grid grid-cols-4 gap-1 sm:gap-2 flex-1">
-        <div 
-          v-for="col in columns" 
-          :key="col.id" 
-          class="flex flex-col items-center border-r border-white/20 last:border-r-0 px-1"
-        >
+        <div v-for="col in columns" :key="col.id" class="flex flex-col items-center border-r border-white/20 last:border-r-0 px-1">
           <div class="text-center font-medium text-sm sm:text-base text-emerald-100 tracking-wider mb-4 pb-1.5 border-b border-white/20 w-full">
             {{ col.name }}
           </div>
 
-          <div 
-            :id="'col-' + col.id"
-            class="kanban-col w-full flex-1 flex flex-col items-center gap-3.5 min-h-[320px]"
-            :data-status="col.id"
-          >
+          <div :id="'col-' + col.id" class="kanban-col w-full flex-1 flex flex-col items-center gap-3.5 min-h-[320px]" :data-status="col.id">
             <div 
               v-for="member in getMembersByStatus(col.id)" 
               :key="member.id"
               :data-id="member.id"
-              @click="openActionMenu(member)"
+              @click="selectMemberToEdit(member)"
               class="member-card cursor-pointer flex flex-col items-center group relative transition-transform active:scale-95"
             >
               <div class="relative">
@@ -108,10 +117,7 @@
                   class="w-12 h-12 sm:w-14 sm:h-14 rounded-full object-cover border-2 border-white/80 avatar-glow group-hover:border-emerald-300"
                   alt="avatar"
                 />
-                <span 
-                  v-if="member.streakMonths > 1" 
-                  class="absolute -top-1 -right-1 bg-amber-400 text-emerald-950 font-bold text-[9px] px-1.5 py-0.5 rounded-full shadow"
-                >
+                <span v-if="member.streakMonths > 1" class="absolute -top-1 -right-1 bg-amber-400 text-emerald-950 font-bold text-[9px] px-1.5 py-0.5 rounded-full shadow">
                   {{ member.streakMonths }}M
                 </span>
               </div>
@@ -126,19 +132,171 @@
       </div>
     </div>
 
-    <!-- 底部功能按鈕 -->
-    <div class="w-full mt-4 flex gap-2">
-      <button @click="showAddModal = true" class="w-full py-2.5 bg-emerald-800/80 hover:bg-emerald-700 border border-emerald-500/30 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all">
+    <!-- 底部操作列：新增成員、匯出/匯入 CSV -->
+    <div class="w-full mt-4 flex flex-col gap-2">
+      <button @click="openAddModal" class="w-full py-2.5 bg-emerald-800/80 hover:bg-emerald-700 border border-emerald-500/30 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all">
         <i data-lucide="user-plus" class="w-4 h-4"></i> 新增成員
       </button>
+
+      <div class="flex gap-2 w-full text-xs text-emerald-300/80">
+        <button @click="exportData" class="flex-1 py-2 bg-emerald-950/60 hover:bg-emerald-900 border border-white/10 rounded-lg flex items-center justify-center gap-1.5 transition-all">
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> 匯出 CSV 資料庫
+        </button>
+        <label class="flex-1 py-2 bg-emerald-950/60 hover:bg-emerald-900 border border-white/10 rounded-lg flex items-center justify-center gap-1.5 cursor-pointer transition-all">
+          <i data-lucide="file-up" class="w-4 h-4"></i> 匯入 CSV
+          <input type="file" accept=".csv" class="hidden" @change="importData">
+        </label>
+      </div>
     </div>
 
-    <!-- 彈窗：調整狀態 -->
-    <div v-if="selectedMember" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3" @click.self="selectedMember = null">
-      <div class="bg-emerald-950 border border-emerald-700/50 rounded-2xl p-5 w-full max-w-xs text-center shadow-2xl">
-        <h3 class="font-bold text-base text-emerald-100 mb-1">調整 {{ selectedMember.name }} 的狀態</h3>
-        <p class="text-xs text-emerald-400/80 mb-4">{{ currentMonth }}</p>
-        <div class="grid grid-cols-2 gap-2 mb-4">
+    <!-- 彈窗：調整狀態、頭像、暱稱與出生月份 -->
+    <div v-if="selectedMember" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-3" @click.self="selectedMember = null; isEditingName = false">
+      <div class="bg-emerald-950 border border-emerald-700/50 rounded-2xl p-5 w-full max-w-xs text-center shadow-2xl flex flex-col items-center">
+        <!-- 頭像與更換按鈕 -->
+        <div class="relative w-16 h-16 mb-1.5 cursor-pointer group" @click="$refs.editAvatarInput.click()" title="點擊更換照片">
+          <img 
+            :src="selectedMember.avatar || ('https://api.dicebear.com/7.x/bottts/svg?seed=' + encodeURIComponent(selectedMember.name))" 
+            class="w-16 h-16 rounded-full object-cover border-2 border-emerald-400/80 shadow-md group-hover:border-emerald-300 transition-all"
+            alt="avatar"
+          />
+          <div class="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px] font-medium">
+            <span>換照片</span>
+          </div>
+          <input ref="editAvatarInput" type="file" accept="image/*" class="hidden" @change="onEditAvatarFileChange">
+        </div>
+        <button @click="$refs.editAvatarInput.click()" class="text-[11px] text-emerald-300/90 hover:text-emerald-200 underline mb-2">
+          更換頭像照片
+        </button>
+
+        <!-- 姓名與修改暱稱 -->
+        <div class="flex items-center justify-center gap-1.5 mb-2">
+          <div v-if="isEditingName" class="flex items-center gap-1">
+            <input 
+              id="edit-member-name-input"
+              v-model="editingName" 
+              @keyup.enter="saveMemberName" 
+              type="text" 
+              maxlength="12"
+              class="bg-emerald-900 border border-emerald-400 rounded-lg px-2.5 py-1 text-sm text-center text-white focus:outline-none w-28"
+            />
+            <button @click="saveMemberName" class="bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-xs px-2 py-1 rounded-md">儲存</button>
+            <button @click="isEditingName = false" class="text-emerald-400 text-xs px-1">取消</button>
+          </div>
+          <div v-else class="flex items-center gap-1.5">
+            <h3 class="font-bold text-base text-emerald-100">{{ selectedMember.name }}</h3>
+            <button @click="startEditName" class="text-[11px] text-emerald-400 hover:text-emerald-200 underline">
+              修改暱稱
+            </button>
+          </div>
+        </div>
+
+        <!-- 出生/登場年月設定（下拉選單相容所有瀏覽器） -->
+        <div class="w-full bg-emerald-900/60 rounded-xl p-3 border border-emerald-700/60 mb-3 text-left">
+          <div class="flex items-center justify-between mb-1">
+            <div class="text-xs text-emerald-200 font-semibold">
+              📅 出生 / 登場月份
+            </div>
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/40">
+              {{ selectedMember.startMonth ? selectedMember.startMonth : '未設定 (全月份可見)' }}
+            </span>
+          </div>
+          <p class="text-[10px] text-emerald-400/80 mb-2">早於此月份該成員將於看板自動隱藏</p>
+
+          <div class="flex items-center gap-1.5">
+            <select v-model="editStartYear" class="flex-1 bg-emerald-950 border border-emerald-600/70 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400">
+              <option value="">選擇年份</option>
+              <option v-for="y in availableYears" :key="y" :value="y">{{ y }} 年</option>
+            </select>
+
+            <select v-model="editStartMonthNum" class="w-20 bg-emerald-950 border border-emerald-600/70 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-400">
+              <option value="">月份</option>
+              <option v-for="m in 12" :key="m" :value="m < 10 ? '0' + m : '' + m">{{ m }} 月</option>
+            </select>
+
+            <button @click="saveMemberStartMonth" class="bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-xs px-2.5 py-1.5 rounded-lg whitespace-nowrap">
+              儲存
+            </button>
+
+            <button v-if="selectedMember.startMonth" @click="clearMemberStartMonth" class="text-rose-300 hover:text-rose-200 text-xs px-1 whitespace-nowrap">
+              清除
+            </button>
+          </div>
+        </div>
+
+        <!-- 快速批次設定歷史狀態時段 -->
+        <div class="w-full bg-emerald-900/40 rounded-xl p-2.5 border border-emerald-700/50 mb-3 text-left">
+          <button 
+            type="button" 
+            @click="toggleBatchPeriod" 
+            class="w-full flex items-center justify-between text-xs font-semibold text-emerald-200 hover:text-white transition-colors"
+          >
+            <span class="flex items-center gap-1.5">
+              <span>⚡ 批次設定歷史狀態時段</span>
+            </span>
+            <span class="text-[11px] text-emerald-400 underline">
+              {{ showBatchPeriod ? '收合' : '展開設定' }}
+            </span>
+          </button>
+
+          <div v-if="showBatchPeriod" class="mt-2.5 pt-2 border-t border-emerald-700/40 text-xs flex flex-col gap-2">
+            <p class="text-[10px] text-emerald-300/80">快速填寫跨月份/跨年份歷史，連續月數將自動重算</p>
+
+            <!-- 起始年月 -->
+            <div class="flex items-center justify-between gap-1.5">
+              <span class="text-[11px] text-emerald-200 font-medium whitespace-nowrap">起始：</span>
+              <div class="flex gap-1 flex-1">
+                <select v-model="batchStartYear" class="flex-1 bg-emerald-950 border border-emerald-600/70 rounded px-1.5 py-1 text-xs text-white focus:outline-none">
+                  <option v-for="y in availableYears" :key="y" :value="y">{{ y }} 年</option>
+                </select>
+                <select v-model="batchStartMonth" class="w-16 bg-emerald-950 border border-emerald-600/70 rounded px-1.5 py-1 text-xs text-white focus:outline-none">
+                  <option v-for="m in 12" :key="m" :value="m < 10 ? '0' + m : '' + m">{{ m }} 月</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 結束年月 -->
+            <div class="flex items-center justify-between gap-1.5">
+              <span class="text-[11px] text-emerald-200 font-medium whitespace-nowrap">結束：</span>
+              <div class="flex gap-1 flex-1">
+                <select v-model="batchEndYear" class="flex-1 bg-emerald-950 border border-emerald-600/70 rounded px-1.5 py-1 text-xs text-white focus:outline-none">
+                  <option v-for="y in availableYears" :key="y" :value="y">{{ y }} 年</option>
+                </select>
+                <select v-model="batchEndMonth" class="w-16 bg-emerald-950 border border-emerald-600/70 rounded px-1.5 py-1 text-xs text-white focus:outline-none">
+                  <option v-for="m in 12" :key="m" :value="m < 10 ? '0' + m : '' + m">{{ m }} 月</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 該時段狀態 -->
+            <div class="flex items-center justify-between gap-1.5">
+              <span class="text-[11px] text-emerald-200 font-medium whitespace-nowrap">狀態：</span>
+              <div class="grid grid-cols-4 gap-1 flex-1">
+                <button 
+                  v-for="col in columns" 
+                  :key="col.id"
+                  type="button"
+                  @click="batchStatus = col.id"
+                  :class="batchStatus === col.id ? 'bg-emerald-500 text-emerald-950 font-bold' : 'bg-emerald-950 text-emerald-200 hover:bg-emerald-800'"
+                  class="py-1 rounded text-[11px] border border-emerald-600/40 transition-all text-center"
+                >
+                  {{ col.name }}
+                </button>
+              </div>
+            </div>
+
+            <!-- 套用按鈕 -->
+            <button 
+              type="button" 
+              @click="applyBatchPeriod" 
+              class="w-full mt-1 py-1.5 bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-emerald-950 font-bold rounded-lg text-xs transition-all shadow"
+            >
+              確認套用此歷史時段
+            </button>
+          </div>
+        </div>
+
+        <p class="text-xs text-emerald-400/80 mb-3.5">調整 {{ currentMonth }} 的狀態</p>
+        <div class="grid grid-cols-2 gap-2 mb-4 w-full">
           <button 
             v-for="col in columns" 
             :key="col.id"
@@ -150,7 +308,7 @@
           </button>
         </div>
         <button @click="removeMember(selectedMember.id)" class="text-rose-400 hover:text-rose-300 text-xs py-1">
-          從此房間移除成員
+          從房間移除成員
         </button>
       </div>
     </div>
@@ -165,8 +323,26 @@
             <input v-model="newMember.name" type="text" placeholder="例如：大明" class="w-full bg-emerald-900/60 border border-emerald-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400">
           </div>
           <div>
-            <label class="block text-xs text-emerald-300/80 mb-1">頭像圖片網址 (選填)</label>
-            <input v-model="newMember.avatar" type="text" placeholder="留空使用預設頭像" class="w-full bg-emerald-900/60 border border-emerald-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400">
+            <label class="block text-xs text-emerald-300/80 mb-1">上傳頭像照片</label>
+            <input type="file" accept="image/*" @change="onAvatarFileChange" class="w-full text-xs text-emerald-200 file:mr-2 file:py-1 file:px-2.5 file:rounded-md file:border-0 file:text-xs file:bg-emerald-800 file:text-emerald-100 hover:file:bg-emerald-700 cursor-pointer">
+            <div v-if="newMember.avatar" class="mt-2 flex items-center gap-2">
+              <img :src="newMember.avatar" class="w-8 h-8 rounded-full border border-white/40 object-cover">
+              <span class="text-[10px] text-emerald-300">頭像已就緒</span>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs text-emerald-300/80 mb-1">出生 / 登場月份 (選填)</label>
+            <div class="flex items-center gap-2">
+              <select v-model="newMemberYear" class="flex-1 bg-emerald-900/60 border border-emerald-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+                <option value="">年份 (預設為當前)</option>
+                <option v-for="y in availableYears" :key="y" :value="y">{{ y }} 年</option>
+              </select>
+              <select v-model="newMemberMonthNum" class="w-24 bg-emerald-900/60 border border-emerald-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-emerald-400">
+                <option value="">月份</option>
+                <option v-for="m in 12" :key="m" :value="m < 10 ? '0' + m : '' + m">{{ m }} 月</option>
+              </select>
+            </div>
+            <p class="text-[10px] text-emerald-400/60 mt-1">早於此月份將於看板自動隱藏</p>
           </div>
           <div>
             <label class="block text-xs text-emerald-300/80 mb-1">初始狀態</label>
@@ -184,254 +360,10 @@
 
   </div>
 
-  <script>
-    // 1. 初始化 Firebase (Compat 全域模式)
-    const firebaseConfig = {
-      apiKey: "AIzaSyCRcwwiQJnyR4jdfq1kLIIvhj-affOQxlQ",
-      authDomain: "relationship-status-78aa0.firebaseapp.com",
-      projectId: "relationship-status-78aa0",
-      storageBucket: "relationship-status-78aa0.firebasestorage.app",
-      messagingSenderId: "423950657383",
-      appId: "1:423950657383:web:13b057f3fb1881326c31c2"
-    };
-
-    let db = null;
-    try {
-      if (window.firebase) {
-        firebase.initializeApp(firebaseConfig);
-        db = firebase.firestore();
-      }
-    } catch (e) {
-      console.warn("Firebase 啟動失敗，使用本機模式", e);
-    }
-
-    // 2. Vue 3 應用
-    const { createApp, ref, computed, onMounted, nextTick } = Vue;
-
-    createApp({
-      setup() {
-        const columns = [
-          { id: 'single', name: '單身' },
-          { id: 'crush', name: '暈船' },
-          { id: 'flirt', name: '曖昧' },
-          { id: 'dating', name: '交往' }
-        ];
-
-        const isCloudMode = ref(!!db);
-        const isExporting = ref(false);
-        const isInherited = ref(false);
-        const selectedMember = ref(null);
-        const showAddModal = ref(false);
-
-        const getRoomId = () => {
-          const hash = window.location.hash;
-          const match = hash.match(/room=([a-zA-Z0-9_-]+)/);
-          if (match) return match[1];
-          const newId = 'board_' + Math.random().toString(36).substring(2, 8);
-          window.location.hash = 'room=' + newId;
-          return newId;
-        };
-
-        const roomId = ref(getRoomId());
-
-        const today = new Date();
-        const currentYear = ref(today.getFullYear());
-        const currentMonthNum = ref(today.getMonth() + 1);
-        const currentMonth = computed(() => {
-          const m = currentMonthNum.value < 10 ? '0' + currentMonthNum.value : currentMonthNum.value;
-          return currentYear.value + '/' + m;
-        });
-
-        const defaultData = {
-          members: {
-            'm1': { id: 'm1', name: '小明', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80' },
-            'm2': { id: 'm2', name: '小美', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80' }
-          },
-          snapshots: {}
-        };
-
-        const savedData = localStorage.getItem('status_board_' + roomId.value);
-        const roomData = ref(savedData ? JSON.parse(savedData) : defaultData);
-        const newMember = ref({ name: '', avatar: '', status: 'single' });
-
-        const save = async () => {
-          localStorage.setItem('status_board_' + roomId.value, JSON.stringify(roomData.value));
-          if (db) {
-            try {
-              await db.collection("status_rooms").doc(roomId.value).set(roomData.value, { merge: true });
-            } catch (e) {
-              console.error("雲端存檔失敗:", e);
-            }
-          }
-        };
-
-        const checkAndInherit = async () => {
-          const currentKey = currentMonth.value;
-          const snapshots = roomData.value.snapshots || {};
-
-          if (!snapshots[currentKey]) {
-            isInherited.value = true;
-            const sortedMonths = Object.keys(snapshots).sort().reverse();
-            const prevMonthKey = sortedMonths.find(m => m < currentKey);
-            const inheritedSnapshot = {};
-
-            const memberList = roomData.value.members || {};
-            Object.keys(memberList).forEach(id => {
-              const prevRecord = prevMonthKey && snapshots[prevMonthKey] ? snapshots[prevMonthKey][id] : null;
-              inheritedSnapshot[id] = {
-                status: prevRecord ? prevRecord.status : 'single',
-                streak: prevRecord ? (prevRecord.streak || 1) + 1 : 1
-              };
-            });
-
-            roomData.value.snapshots[currentKey] = inheritedSnapshot;
-            await save();
-          } else {
-            isInherited.value = false;
-          }
-          nextTick(initSortable);
-        };
-
-        const initSync = () => {
-          if (db) {
-            db.collection("status_rooms").doc(roomId.value).onSnapshot((snap) => {
-              if (snap.exists) {
-                roomData.value = snap.data();
-                checkAndInherit();
-              } else {
-                checkAndInherit();
-                save();
-              }
-            }, (err) => {
-              console.warn("即時同步錯誤，維持本機資料", err);
-              checkAndInherit();
-            });
-          } else {
-            checkAndInherit();
-          }
-        };
-
-        const getMembersByStatus = (statusId) => {
-          const currentSnapshot = (roomData.value.snapshots && roomData.value.snapshots[currentMonth.value]) || {};
-          const members = roomData.value.members || {};
-          return Object.keys(members)
-            .filter(id => (currentSnapshot[id]?.status || 'single') === statusId)
-            .map(id => ({
-              ...members[id],
-              status: currentSnapshot[id]?.status || 'single',
-              streakMonths: currentSnapshot[id]?.streak || 1
-            }));
-        };
-
-        const updateStatus = async (memberId, newStatus) => {
-          const currentKey = currentMonth.value;
-          if (!roomData.value.snapshots[currentKey]) roomData.value.snapshots[currentKey] = {};
-          
-          const oldStatus = roomData.value.snapshots[currentKey][memberId]?.status;
-          const isDating = newStatus === 'dating' && oldStatus !== 'dating';
-
-          roomData.value.snapshots[currentKey][memberId] = {
-            status: newStatus,
-            streak: oldStatus === newStatus ? (roomData.value.snapshots[currentKey][memberId]?.streak || 1) : 1
-          };
-
-          selectedMember.value = null;
-          await save();
-
-          if (isDating && window.confetti) {
-            confetti({ particleCount: 90, spread: 60, origin: { y: 0.7 } });
-          }
-        };
-
-        const changeMonth = (delta) => {
-          let m = currentMonthNum.value + delta;
-          let y = currentYear.value;
-          if (m > 12) { m = 1; y++; }
-          if (m < 1) { m = 12; y--; }
-          currentMonthNum.value = m;
-          currentYear.value = y;
-          checkAndInherit();
-        };
-
-        const addMember = async () => {
-          if (!newMember.value.name.trim()) return;
-          const newId = 'm_' + Date.now();
-          if (!roomData.value.members) roomData.value.members = {};
-          
-          roomData.value.members[newId] = {
-            id: newId,
-            name: newMember.value.name.trim(),
-            avatar: newMember.value.avatar.trim()
-          };
-          if (!roomData.value.snapshots[currentMonth.value]) roomData.value.snapshots[currentMonth.value] = {};
-          roomData.value.snapshots[currentMonth.value][newId] = {
-            status: newMember.value.status,
-            streak: 1
-          };
-          newMember.value = { name: '', avatar: '', status: 'single' };
-          showAddModal.value = false;
-          await save();
-        };
-
-        const removeMember = async (id) => {
-          if (!confirm('確定要從房間刪除此成員嗎？')) return;
-          delete roomData.value.members[id];
-          selectedMember.value = null;
-          await save();
-        };
-
-        const openActionMenu = (m) => {
-          selectedMember.value = m;
-        };
-
-        const copyRoomLink = () => {
-          navigator.clipboard.writeText(window.location.href);
-          alert('看板連結已複製！發給朋友點開即可共同編輯！');
-        };
-
-        const exportStory = async () => {
-          isExporting.value = true;
-          const boardEl = document.getElementById('capture-board');
-          const canvas = await html2canvas(boardEl, { scale: 3, useCORS: true, backgroundColor: '#23473f' });
-          const link = document.createElement('a');
-          link.download = `Status-Board-${currentMonth.value.replace('/', '-')}.png`;
-          link.href = canvas.toDataURL('image/png');
-          link.click();
-          isExporting.value = false;
-        };
-
-        const initSortable = () => {
-          if (!window.Sortable) return;
-          columns.forEach(col => {
-            const el = document.getElementById('col-' + col.id);
-            if (!el || el._sortable) return;
-            el._sortable = Sortable.create(el, {
-              group: 'status-group',
-              animation: 150,
-              onEnd: (evt) => {
-                const memberId = evt.item.getAttribute('data-id');
-                const targetStatus = evt.to.getAttribute('data-status');
-                if (memberId && targetStatus) {
-                  updateStatus(memberId, targetStatus);
-                }
-              }
-            });
-          });
-        };
-
-        onMounted(() => {
-          if (window.lucide) lucide.createIcons();
-          initSync();
-        });
-
-        return {
-          columns, currentMonth, isInherited, isCloudMode, isExporting,
-          selectedMember, showAddModal, newMember,
-          getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
-          openActionMenu, copyRoomLink, exportStory
-        };
-      }
-    }).mount('#app');
-  </script>
+  <!-- 按照相依順序載入模組 (加 ?v=5 避免瀏覽器快取) -->
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/storage.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
 </body>
 </html>
