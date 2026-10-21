@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/33534322/README.md)
+[README.md](https://github.com/user-attachments/files/33534201/README.md)
 # 感情狀態看板 (Relationship Status Board) 💘
 
 一個為朋友社群設計的互動式「感情狀態追蹤看板」。支援多人即時同步、月份歷史回顧、狀態連續月數統計、頭像上傳壓縮、脫單慶祝彩帶以及一鍵匯出 IG 限動圖片與 CSV 備份。
