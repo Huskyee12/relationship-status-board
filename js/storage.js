@@ -9,6 +9,21 @@ window.BoardStorage = {
         if (!firebase.apps || !firebase.apps.length) {
           firebase.initializeApp(window.FIREBASE_CONFIG);
         }
+
+        // 若有設定 App Check Site Key 且載入了 App Check 模組，自動啟用機器人防護
+        if (window.FIREBASE_CONFIG.appCheckSiteKey && firebase.appCheck) {
+          try {
+            const appCheck = firebase.appCheck();
+            appCheck.activate(
+              window.FIREBASE_CONFIG.appCheckSiteKey,
+              true /* isTokenAutoRefreshEnabled */
+            );
+            console.log("Firebase App Check 機器人防護已啟用");
+          } catch (appCheckErr) {
+            console.warn("Firebase App Check 啟動略過:", appCheckErr);
+          }
+        }
+
         this.db = firebase.firestore();
         this.isInitialized = true;
       }

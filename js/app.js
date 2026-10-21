@@ -15,6 +15,7 @@ createApp({
     const isInherited = ref(false);
     const selectedMember = ref(null);
     const showAddModal = ref(false);
+    const showRoomModal = ref(false);
 
     // 日期計算
     const today = new Date();
@@ -325,6 +326,10 @@ createApp({
       }
     });
 
+    watch(showRoomModal, (val) => {
+      if (val) nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    });
+
     // 點擊卡片開啟編輯彈窗，自動填入該成員現有的出生年月
     const selectMemberToEdit = (member) => {
       selectedMember.value = member;
@@ -601,8 +606,40 @@ const removeMember = async (id) => {
     };
 
     const copyRoomLink = () => {
-      navigator.clipboard.writeText(window.location.href);
-      alert('看板連結已複製！');
+      const url = window.location.href;
+      navigator.clipboard.writeText(url);
+      if (roomId.value === 'main') {
+        alert('看板連結已複製！\n\n⚠️ 提醒：目前處於公開大廳 (main)，建議點擊左上角「公開大廳」標籤升級為「私密房間」，防止資料被外人誤改。');
+      } else {
+        alert('🔒 私密房間專屬連結已複製！\n只有知道此連結的人才能存取與編輯。');
+      }
+    };
+
+    // 建立並搬移至專屬高熵私密房間 (密碼學等級無法暴力猜測)
+    const createPrivateRoom = async () => {
+      if (!confirm('即將為您建立專屬的高熵私密房間，並將目前看板資料完整搬移過去。\n\n建立後除了收到專屬連結的人，外界爬蟲與路人皆無法猜測或訪問，確定建立嗎？')) {
+        return;
+      }
+      const newRoomId = window.generateSecureRoomId ? window.generateSecureRoomId() : ('room_' + Math.random().toString(36).substring(2, 14));
+
+      // 先將目前看板資料寫入新房間 (包含雲端與本機)
+      if (window.BoardStorage) {
+        await window.BoardStorage.save(newRoomId, roomData.value);
+      }
+      try {
+        localStorage.setItem('last_active_room', newRoomId);
+      } catch (e) {}
+
+      const newUrl = window.location.origin + window.location.pathname + '#room=' + newRoomId;
+      try {
+        await navigator.clipboard.writeText(newUrl);
+        alert(`🎉 專屬私密房間建立成功！\n\n房間代碼：${newRoomId}\n\n專屬私密連結已自動複製至剪貼簿，請將此連結分享給群組好友使用！`);
+      } catch (e) {
+        alert(`🎉 專屬私密房間建立成功！\n\n房間代碼：${newRoomId}\n請複製新網址：${newUrl}`);
+      }
+
+      window.location.hash = 'room=' + newRoomId;
+      showRoomModal.value = false;
     };
 
     // 拖曳功能綁定
@@ -691,7 +728,8 @@ const removeMember = async (id) => {
       showBatchPeriod, toggleBatchPeriod,
       batchStartYear, batchStartMonth, batchEndYear, batchEndMonth, batchStatus, applyBatchPeriod,
       getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
-      onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink
+      onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink,
+      roomId, showRoomModal, createPrivateRoom
     };
   }
 }).mount('#app');
