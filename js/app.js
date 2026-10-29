@@ -15,6 +15,9 @@ createApp({
     const isInherited = ref(false);
     const selectedMember = ref(null);
     const showAddModal = ref(false);
+    const showRoomModal = ref(false);
+    const showExportModal = ref(false);
+    const exportResult = ref(null);
 
     // 日期計算
     const today = new Date();
@@ -325,6 +328,14 @@ createApp({
       }
     });
 
+    watch(showRoomModal, (val) => {
+      if (val) nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    });
+
+    watch(showExportModal, (val) => {
+      if (val) nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    });
+
     // 點擊卡片開啟編輯彈窗，自動填入該成員現有的出生年月
     const selectMemberToEdit = (member) => {
       selectedMember.value = member;
@@ -567,23 +578,26 @@ const removeMember = async (id) => {
       }
     };
 
-    // CSV 匯入
+    // CSV 匯入 (含指紋驗證與還原前預覽確認)
     const importData = async (event) => {
       const file = event.target.files[0];
       if (!file) return;
       try {
         if (window.BoardStorage) {
           const imported = await window.BoardStorage.importCsvBackup(file);
-          if (confirm('匯入將會覆寫目前的看板資料，確定要覆蓋嗎？')) {
+          const memberNames = Object.values(imported.members).map(m => m.name).join('、');
+          const monthCount = Object.keys(imported.snapshots).length;
+          const msg = `✅ 格式指紋驗證通過！\n\n📌 包含成員：${memberNames}\n📅 涵蓋歷史月份：${monthCount} 個月\n\n⚠️ 警告：確定要將此備份檔覆寫至目前的看板資料庫嗎？`;
+          if (confirm(msg)) {
             roomData.value = imported;
             recalculateAllStreaks(roomData.value.snapshots, roomData.value.members);
             await window.BoardStorage.save(roomId.value, roomData.value);
             await checkAndInherit(true);
-            alert('CSV 資料庫匯入成功！');
+            alert('🎉 備份資料庫已成功還原！');
           }
         }
       } catch (err) {
-        alert('匯入失敗：' + err.message);
+        alert('❌ ' + err.message);
       }
       event.target.value = '';
     };
@@ -592,17 +606,87 @@ const removeMember = async (id) => {
     const exportStory = async () => {
       isExporting.value = true;
       await nextTick();
-      if (window.BoardUtils) {
-        await window.BoardUtils.exportToStoryImage('capture-board', currentMonth.value);
+      try {
+        if (window.BoardUtils) {
+          const res = await window.BoardUtils.exportToStoryImage('capture-board', currentMonth.value);
+          if (res) {
+            exportResult.value = res;
+            showExportModal.value = true;
+          }
+        }
+      } catch (err) {
+        alert('匯出圖片時發生異常：' + err.message);
+      } finally {
+        isExporting.value = false;
+        await nextTick();
+        if (window.lucide) lucide.createIcons();
       }
-      isExporting.value = false;
-      await nextTick();
-      if (window.lucide) lucide.createIcons();
+    };
+
+    // 手動觸發系統分享 (iPhone / 行動裝置專用)
+    const shareExportedImage = async () => {
+      if (!exportResult.value || !exportResult.value.file) return;
+      if (navigator.canShare && exportResult.value.file instanceof File && navigator.canShare({ files: [exportResult.value.file] })) {
+        try {
+          await navigator.share({
+            files: [exportResult.value.file],
+            title: '感情狀態看板',
+            text: `${currentMonth.value} 感情狀態看板`
+          });
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            alert('系統分享異常，請直接長按上方圖片選擇「儲存影像」存入相簿！');
+          }
+        }
+      } else {
+        alert('此瀏覽器不支援直接呼叫系統分享，請直接「長按上方圖片」選擇「儲存影像」即可存入相簿！');
+      }
+    };
+
+    // 手動觸發下載
+    const downloadExportedImage = () => {
+      if (!exportResult.value) return;
+      const link = document.createElement('a');
+      link.download = exportResult.value.fileName;
+      link.href = exportResult.value.dataUrl;
+      link.click();
     };
 
     const copyRoomLink = () => {
-      navigator.clipboard.writeText(window.location.href);
-      alert('看板連結已複製！');
+      const url = window.location.href;
+      navigator.clipboard.writeText(url);
+      if (roomId.value === 'main') {
+        alert('看板連結已複製！\n\n⚠️ 提醒：目前處於公開大廳 (main)，建議點擊左上角「公開大廳」標籤升級為「私密房間」，防止資料被外人誤改。');
+      } else {
+        alert('🔒 私密房間專屬連結已複製！\n只有知道此連結的人才能存取與編輯。');
+      }
+    };
+
+    // 建立並搬移至專屬高熵私密房間 (密碼學等級無法暴力猜測)
+    const createPrivateRoom = async () => {
+      if (!confirm('即將為您建立專屬的高熵私密房間，並將目前看板資料完整搬移過去。\n\n建立後除了收到專屬連結的人，外界爬蟲與路人皆無法猜測或訪問，確定建立嗎？')) {
+        return;
+      }
+      const newRoomId = window.generateSecureRoomId ? window.generateSecureRoomId() : ('room_' + Math.random().toString(36).substring(2, 14));
+
+      // 先將目前看板資料寫入新房間 (包含雲端與本機)
+      if (window.BoardStorage) {
+        await window.BoardStorage.save(newRoomId, roomData.value);
+      }
+      try {
+        localStorage.setItem('last_active_room', newRoomId);
+      } catch (e) {}
+
+      const newUrl = window.location.origin + window.location.pathname + '#room=' + newRoomId;
+      try {
+        await navigator.clipboard.writeText(newUrl);
+        alert(`🎉 專屬私密房間建立成功！\n\n房間代碼：${newRoomId}\n\n專屬私密連結已自動複製至剪貼簿，請將此連結分享給群組好友使用！`);
+      } catch (e) {
+        alert(`🎉 專屬私密房間建立成功！\n\n房間代碼：${newRoomId}\n請複製新網址：${newUrl}`);
+      }
+
+      window.location.hash = 'room=' + newRoomId;
+      showRoomModal.value = false;
     };
 
     // 拖曳功能綁定
@@ -691,7 +775,9 @@ const removeMember = async (id) => {
       showBatchPeriod, toggleBatchPeriod,
       batchStartYear, batchStartMonth, batchEndYear, batchEndMonth, batchStatus, applyBatchPeriod,
       getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
-      onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink
+      onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink,
+      roomId, showRoomModal, createPrivateRoom,
+      showExportModal, exportResult, shareExportedImage, downloadExportedImage
     };
   }
 }).mount('#app');

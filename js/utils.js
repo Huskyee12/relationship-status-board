@@ -45,7 +45,30 @@ window.BoardUtils = {
   async exportToStoryImage(elementId, monthStr) {
     const el = document.getElementById(elementId);
     if (!el || !window.html2canvas) return;
-    const canvas = await html2canvas(el, { scale: 3, useCORS: true, backgroundColor: '#23473f' });
+    const canvas = await html2canvas(el, {
+      scale: 3,
+      useCORS: true,
+      backgroundColor: '#23473f',
+      onclone: (clonedDoc) => {
+        // 1. 徹底解決 html2canvas 截斷成員名字底部的問題：
+        // 解除 overflow: hidden 遮罩，並給予充足的行高與底部空間
+        const nameElements = clonedDoc.querySelectorAll('.member-name');
+        nameElements.forEach(nameEl => {
+          nameEl.style.overflow = 'visible';
+          nameEl.style.textOverflow = 'clip';
+          nameEl.style.whiteSpace = 'nowrap';
+          nameEl.style.lineHeight = '1.5';
+          nameEl.style.paddingBottom = '6px';
+          nameEl.style.display = 'block';
+        });
+
+        // 2. 徹底隱藏不需要出現在限動圖片上的元素（切換箭頭、繼承狀態提示）
+        const ignoredElements = clonedDoc.querySelectorAll('[data-html2canvas-ignore]');
+        ignoredElements.forEach(item => {
+          item.style.display = 'none';
+        });
+      }
+    });
     const link = document.createElement('a');
     link.download = `Status-Board-${monthStr.replace('/', '-')}.png`;
     link.href = canvas.toDataURL('image/png');
