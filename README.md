@@ -52,8 +52,11 @@ relationship-status-board/
   * 點擊月份數字（如 `10`）直接呼叫原生月份選單。
   * 左右兩側保留 `<` 與 `>` 箭頭，支援逐月快切。
 
-### 6. 📱 一鍵匯出 IG / FB 完美限動卡片 (html2canvas)
+### 6. 📱 一鍵匯出 IG / FB 完美限動卡片 (html2canvas & Web Share API)
 * 點擊右上角「匯出限動」，自動將當前看板渲染輸出為 3 倍高解析度的深綠質感 PNG 圖檔。
+* **完美相容 iPhone / iOS 與 LINE 內建瀏覽器**：
+  * 徹底解決行動端 Safari 與 LINE 等內建瀏覽器阻擋非同步自動下載檔案的限制。
+  * 自動喚起「高清圖片預覽彈窗」，手機使用者可直接**長按圖片選擇「儲存影像」存入相簿**，或點擊按鈕呼叫系統 Web Share API 直接發布至 Instagram 限動、LINE 或 AirDrop！
 * **文字切斷痛點修復**：透過 `html2canvas` 的 `onclone` 鉤子在生成圖片瞬間解除 `overflow: hidden`，徹底修復中文筆畫與英文字母被截斷削邊的經典 Bug。
 * **純淨限動無雜訊**：標註 `data-html2canvas-ignore` 屬性，在生成瞬間自動隱藏左右箭頭與繼承提示文字，圖片只留下最純粹的看板標題與成員卡片。
 
@@ -73,9 +76,10 @@ relationship-status-board/
 * **智慧裁切與極速壓縮**：內建 HTML5 Canvas 自動正方形置中裁切並壓縮至 **128×128 JPEG**，有效防止 Base64 膨脹，兼顧載入流暢度與 Firebase 儲存額度。
 * 若未上傳照片，自動透過 DiceBear API 根據姓名生成可愛的專屬機器人頭像。
 
-### 9. 📊 完整 CSV 資料庫備份與 1 秒還原
+### 9. 📊 完整 CSV 資料庫備份、格式指紋防呆與 1 秒還原
 * **匯出 CSV**：支援帶有 UTF-8 BOM 標記的標準 CSV 檔案（包含成員、狀態、連續月數、出生月份與 Base64 自訂照片），使用 Excel 開啟繁中不亂碼。
-* **匯入 CSV**：遇任何誤改或遺失時，選取備份檔案即可在 1 秒內全數 100% 還原！
+* **嚴格格式指紋驗證**：匯入時強制校驗標題列（必須具備「月份、成員姓名、狀態」等專屬欄位）與月份合法格式。若誤傳發票、名冊等非看板 CSV，系統將立刻彈窗阻擋，徹底防止誤覆蓋！
+* **還原前預覽確認**：驗證通過後會清楚列出該備份檔所包含的「所有成員名單」與「歷史月份數量」，確認無誤才覆蓋，多重安全防呆。
 
 ---
 
@@ -100,9 +104,9 @@ service cloud.firestore {
         request.resource.data.keys().hasAll(['members', 'snapshots']) &&
         request.resource.data.members is map &&
         request.resource.data.snapshots is map &&
-        // 防止惡意灌水 (單一房間成員不超過 100 人，歷史月份不超過 600 個月)
-        request.resource.data.members.size() <= 100 &&
-        request.resource.data.snapshots.size() <= 600 &&
+        // 防止惡意灌水 (單一房間成員不超過 10 人，歷史月份不超過 1200 個月 = 100 年)
+        request.resource.data.members.size() <= 10 &&
+        request.resource.data.snapshots.size() <= 1200 &&
         // 房間 ID 長度限制 (3 ~ 64 字元)
         roomId.size() >= 3 && roomId.size() <= 64;
     }

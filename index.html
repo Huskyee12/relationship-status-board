@@ -19,8 +19,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-check-compat.js"></script>
 
-  <!-- 獨立樣式檔 (加 ?v=7 避免瀏覽器快取) -->
-  <link rel="stylesheet" href="css/style.css?v=7">
+  <!-- 獨立樣式檔 (加 ?v=8 避免瀏覽器快取) -->
+  <link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body class="text-white min-h-screen flex flex-col items-center p-3 sm:p-6">
   <div id="app" class="w-full max-w-md flex flex-col items-center">
@@ -399,12 +399,72 @@
       </div>
     </div>
 
+    <!-- 彈窗：限動圖片生成預覽 (徹底解決 iPhone / Safari 及 LINE 內建瀏覽器無法直接下載圖檔的問題) -->
+    <div v-if="showExportModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-3" @click.self="showExportModal = false">
+      <div class="bg-emerald-950 border border-emerald-700/60 rounded-2xl p-4 w-full max-w-sm text-center shadow-2xl flex flex-col items-center max-h-[92vh] overflow-y-auto">
+        <div class="flex items-center justify-between w-full mb-2">
+          <div class="flex items-center gap-1.5 text-emerald-200 font-bold text-sm">
+            <i data-lucide="sparkles" class="w-4 h-4 text-amber-300"></i>
+            <span>限動圖片已生成！</span>
+          </div>
+          <button @click="showExportModal = false" class="text-white/60 hover:text-white p-1 cursor-pointer">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- 提示標籤：手機用戶長按教學 -->
+        <div class="w-full bg-emerald-900/60 border border-emerald-500/40 rounded-xl p-2.5 mb-3 text-left">
+          <p class="text-[11px] text-emerald-100 font-semibold flex items-center gap-1.5">
+            <span>📱</span>
+            <span>iPhone / 手機相簿存圖：</span>
+          </p>
+          <p class="text-[10px] text-emerald-300/90 mt-1 leading-relaxed">
+            請直接<strong>「長按下方圖片」</strong>➔ 選擇<strong>「儲存影像」</strong>（或「加入照片」），即可直接存入手機相簿！亦可點擊下方按鈕呼叫系統分享。
+          </p>
+        </div>
+
+        <!-- 生成的高清圖片預覽 -->
+        <div class="w-full rounded-xl overflow-hidden shadow-lg border border-white/10 mb-3 bg-[#23473f] flex items-center justify-center">
+          <img 
+            :src="exportResult ? exportResult.dataUrl : ''" 
+            alt="Status Board Story" 
+            class="allow-long-press w-full h-auto object-contain max-h-[48vh] rounded-xl cursor-pointer"
+            title="長按圖片即可儲存"
+          />
+        </div>
+
+        <!-- 操作按鈕列 -->
+        <div class="w-full flex flex-col gap-2">
+          <button 
+            @click="shareExportedImage" 
+            class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-emerald-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer"
+          >
+            <i data-lucide="share" class="w-4 h-4"></i> 分享到 IG 限動 / 儲存至相簿
+          </button>
+          
+          <button 
+            @click="downloadExportedImage" 
+            class="w-full py-2 rounded-xl bg-emerald-900/70 hover:bg-emerald-800 border border-emerald-600/40 text-emerald-200 text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+          >
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> 下載圖片檔案 (PNG)
+          </button>
+
+          <button 
+            @click="showExportModal = false" 
+            class="w-full py-1 text-xs text-emerald-400/80 hover:text-emerald-200 transition-colors cursor-pointer"
+          >
+            關閉
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- 按照相依順序載入模組 (加 ?v=7 避免瀏覽器快取) -->
-  <script src="js/config.js?v=7"></script>
-  <script src="js/utils.js?v=7"></script>
-  <script src="js/storage.js?v=7"></script>
-  <script src="js/app.js?v=7"></script>
+  <!-- 按照相依順序載入模組 (加 ?v=9 避免瀏覽器快取) -->
+  <script src="js/config.js?v=9"></script>
+  <script src="js/utils.js?v=9"></script>
+  <script src="js/storage.js?v=9"></script>
+  <script src="js/app.js?v=9"></script>
 </body>
 </html>

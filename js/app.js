@@ -16,6 +16,8 @@ createApp({
     const selectedMember = ref(null);
     const showAddModal = ref(false);
     const showRoomModal = ref(false);
+    const showExportModal = ref(false);
+    const exportResult = ref(null);
 
     // 日期計算
     const today = new Date();
@@ -330,6 +332,10 @@ createApp({
       if (val) nextTick(() => { if (window.lucide) lucide.createIcons(); });
     });
 
+    watch(showExportModal, (val) => {
+      if (val) nextTick(() => { if (window.lucide) lucide.createIcons(); });
+    });
+
     // 點擊卡片開啟編輯彈窗，自動填入該成員現有的出生年月
     const selectMemberToEdit = (member) => {
       selectedMember.value = member;
@@ -572,23 +578,26 @@ const removeMember = async (id) => {
       }
     };
 
-    // CSV 匯入
+    // CSV 匯入 (含指紋驗證與還原前預覽確認)
     const importData = async (event) => {
       const file = event.target.files[0];
       if (!file) return;
       try {
         if (window.BoardStorage) {
           const imported = await window.BoardStorage.importCsvBackup(file);
-          if (confirm('匯入將會覆寫目前的看板資料，確定要覆蓋嗎？')) {
+          const memberNames = Object.values(imported.members).map(m => m.name).join('、');
+          const monthCount = Object.keys(imported.snapshots).length;
+          const msg = `✅ 格式指紋驗證通過！\n\n📌 包含成員：${memberNames}\n📅 涵蓋歷史月份：${monthCount} 個月\n\n⚠️ 警告：確定要將此備份檔覆寫至目前的看板資料庫嗎？`;
+          if (confirm(msg)) {
             roomData.value = imported;
             recalculateAllStreaks(roomData.value.snapshots, roomData.value.members);
             await window.BoardStorage.save(roomId.value, roomData.value);
             await checkAndInherit(true);
-            alert('CSV 資料庫匯入成功！');
+            alert('🎉 備份資料庫已成功還原！');
           }
         }
       } catch (err) {
-        alert('匯入失敗：' + err.message);
+        alert('❌ ' + err.message);
       }
       event.target.value = '';
     };
@@ -597,12 +606,50 @@ const removeMember = async (id) => {
     const exportStory = async () => {
       isExporting.value = true;
       await nextTick();
-      if (window.BoardUtils) {
-        await window.BoardUtils.exportToStoryImage('capture-board', currentMonth.value);
+      try {
+        if (window.BoardUtils) {
+          const res = await window.BoardUtils.exportToStoryImage('capture-board', currentMonth.value);
+          if (res) {
+            exportResult.value = res;
+            showExportModal.value = true;
+          }
+        }
+      } catch (err) {
+        alert('匯出圖片時發生異常：' + err.message);
+      } finally {
+        isExporting.value = false;
+        await nextTick();
+        if (window.lucide) lucide.createIcons();
       }
-      isExporting.value = false;
-      await nextTick();
-      if (window.lucide) lucide.createIcons();
+    };
+
+    // 手動觸發系統分享 (iPhone / 行動裝置專用)
+    const shareExportedImage = async () => {
+      if (!exportResult.value || !exportResult.value.file) return;
+      if (navigator.canShare && exportResult.value.file instanceof File && navigator.canShare({ files: [exportResult.value.file] })) {
+        try {
+          await navigator.share({
+            files: [exportResult.value.file],
+            title: '感情狀態看板',
+            text: `${currentMonth.value} 感情狀態看板`
+          });
+        } catch (err) {
+          if (err.name !== 'AbortError') {
+            alert('系統分享異常，請直接長按上方圖片選擇「儲存影像」存入相簿！');
+          }
+        }
+      } else {
+        alert('此瀏覽器不支援直接呼叫系統分享，請直接「長按上方圖片」選擇「儲存影像」即可存入相簿！');
+      }
+    };
+
+    // 手動觸發下載
+    const downloadExportedImage = () => {
+      if (!exportResult.value) return;
+      const link = document.createElement('a');
+      link.download = exportResult.value.fileName;
+      link.href = exportResult.value.dataUrl;
+      link.click();
     };
 
     const copyRoomLink = () => {
@@ -729,7 +776,8 @@ const removeMember = async (id) => {
       batchStartYear, batchStartMonth, batchEndYear, batchEndMonth, batchStatus, applyBatchPeriod,
       getMembersByStatus, updateStatus, changeMonth, addMember, removeMember,
       onAvatarFileChange, onEditAvatarFileChange, exportData, importData, exportStory, copyRoomLink,
-      roomId, showRoomModal, createPrivateRoom
+      roomId, showRoomModal, createPrivateRoom,
+      showExportModal, exportResult, shareExportedImage, downloadExportedImage
     };
   }
 }).mount('#app');

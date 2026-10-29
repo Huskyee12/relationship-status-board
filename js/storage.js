@@ -101,7 +101,7 @@ window.BoardStorage = {
     URL.revokeObjectURL(link.href);
   },
 
-  // 2. 匯入並解析 CSV 檔案重組資料庫結構
+  // 2. 匯入並解析 CSV 檔案重組資料庫結構 (含嚴格格式指紋與安全性檢查)
   importCsvBackup(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -109,12 +109,20 @@ window.BoardStorage = {
         try {
           const text = e.target.result;
           const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
-          if (lines.length < 2) return reject(new Error('CSV 檔案內容為空'));
+          if (lines.length < 2) {
+            return reject(new Error('檔案內容為空或行數不足！'));
+          }
+
+          // 1. 標題列格式指紋檢查 (必須為本看板專屬備份檔)
+          const headerLine = lines[0].replace(/^\uFEFF/, '').trim();
+          if (!headerLine.includes('月份') || (!headerLine.includes('成員姓名') && !headerLine.includes('姓名')) || !headerLine.includes('狀態')) {
+            return reject(new Error('檔案格式不相符！\n\n此 CSV 檔案缺少「月份、成員姓名、狀態」等必要欄位，並非本看板的專屬備份檔。'));
+          }
 
           const statusReverseMap = { '單身': 'single', '暈船': 'crush', '曖昧': 'flirt', '交往': 'dating' };
           const resultData = { members: {}, snapshots: {} };
 
-          // 跳過第一行標題
+          // 2. 逐行解析資料列
           for (let i = 1; i < lines.length; i++) {
             // 解析 CSV 格式 (支援引號包裹內容)
             const regex = /(?:,|\n|^)("(?:(?:"")*[^"]*)*"|[^",\n]*|(?:\n|$))/g;
@@ -130,8 +138,26 @@ window.BoardStorage = {
             }
 
             if (matches.length >= 4) {
-              const [month, name, statusText, streak, avatar, startMonth] = matches;
-              if (!month || !name) continue;
+              const [monthRaw, nameRaw, statusText, streakRaw, avatar, startMonth] = matches;
+              if (!monthRaw || !nameRaw) continue;
+
+              const name = nameRaw.trim();
+              const monthStr = monthRaw.trim();
+              if (!name) continue;
+
+              // 月份正規化與格式校驗 (必須符合 YYYY/MM 或 YYYY-MM)
+              const monthMatch = monthStr.match(/^(\d{4})[/-](\d{1,2})$/);
+              if (!monthMatch) continue;
+              const normalizedMonth = `${monthMatch[1]}/${monthMatch[2].padStart(2, '0')}`;
+
+              // 登場月份格式校驗 (若有填寫)
+              let normalizedStartMonth = '';
+              if (startMonth && startMonth.trim()) {
+                const startMatch = startMonth.trim().match(/^(\d{4})[/-](\d{1,2})$/);
+                if (startMatch) {
+                  normalizedStartMonth = `${startMatch[1]}/${startMatch[2].padStart(2, '0')}`;
+                }
+              }
 
               // 以姓名建立穩定的 member ID
               const memberId = 'm_' + encodeURIComponent(name);
@@ -140,22 +166,38 @@ window.BoardStorage = {
                   id: memberId,
                   name: name,
                   avatar: avatar || '',
-                  startMonth: startMonth || ''
+                  startMonth: normalizedStartMonth
                 };
-              } else if (startMonth && !resultData.members[memberId].startMonth) {
-                resultData.members[memberId].startMonth = startMonth;
+              } else if (normalizedStartMonth && !resultData.members[memberId].startMonth) {
+                resultData.members[memberId].startMonth = normalizedStartMonth;
               }
 
-              if (!resultData.snapshots[month]) {
-                resultData.snapshots[month] = {};
+              if (!resultData.snapshots[normalizedMonth]) {
+                resultData.snapshots[normalizedMonth] = {};
               }
 
-              const statusCode = statusReverseMap[statusText] || 'single';
-              resultData.snapshots[month][memberId] = {
+              const statusCode = statusReverseMap[statusText.trim()] || 'single';
+              resultData.snapshots[normalizedMonth][memberId] = {
                 status: statusCode,
-                streak: parseInt(streak, 10) || 1
+                streak: parseInt(streakRaw, 10) || 1
               };
             }
+          }
+
+          // 3. 完整性與安全性門檻檢查
+          const memberCount = Object.keys(resultData.members).length;
+          const monthCount = Object.keys(resultData.snapshots).length;
+
+          if (memberCount === 0 || monthCount === 0) {
+            return reject(new Error('未在檔案中讀取到任何合法的成員或月份資料！請確認檔案內容格式。'));
+          }
+
+          if (memberCount > 10) {
+            return reject(new Error(`成員數量超出上限！\n\n此備份檔包含 ${memberCount} 位成員，已超出目前房間上限（10人）。`));
+          }
+
+          if (monthCount > 1200) {
+            return reject(new Error(`歷史月份超出上限！\n\n此備份檔包含 ${monthCount} 個月份，已超出目前上限（1200個月）。`));
           }
 
           resolve(resultData);
